@@ -1,9 +1,9 @@
 import tensorflow as tf
-# from tensorflow.python.keras.backend import set_session
-# config = tf.compat.v1.ConfigProto()
-# config.gpu_options.allow_growth=True
-# session = tf.compat.v1.Session(config=config)
-# set_session(session)
+from tensorflow.python.keras.backend import set_session
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth=True
+session = tf.compat.v1.Session(config=config)
+set_session(session)
 import pickle
 import tables
 import configs
@@ -17,7 +17,7 @@ import threading
 from utils import normalize, cos_np_for_normalized, cos_np
 from models import *
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 class CodeSearcher:
 	def __init__(self, conf):
@@ -80,6 +80,9 @@ class CodeSearcher:
 		chunk_apiseq = self.load_hdf5(self.path + self.conf.train_apiseq, offset, chunk_size)
 		chunk_tokens = self.load_hdf5(self.path + self.conf.train_tokens, offset, chunk_size)
 		chunk_descs = self.load_hdf5(self.path + self.conf.train_desc, offset, chunk_size)
+		with open('read2.txt', 'w') as f:
+			f.write(str(chunk_methnames))
+			f.close()
 		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs
 
 	def load_valid_data(self, chunk_size):
@@ -196,7 +199,6 @@ class CodeSearcher:
 			print('Epoch %d' % i, end=' ')
 			chunk_methnames, chunk_apiseqs, chunk_tokens, chunk_descs = self.load_train_data(
 				i * self.conf.chunk_size, self.conf.chunk_size)
-			print(chunk_methnames)
 			chunk_padded_methnames = self.pad(chunk_methnames, self.conf.methname_len)
 			chunk_padded_apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
 			chunk_padded_tokens = self.pad(chunk_tokens, self.conf.tokens_len)
@@ -419,7 +421,7 @@ class CodeSearcher:
 if __name__ == '__main__':
 	conf = configs.conf()
 	codesearcher = CodeSearcher(conf)
-	mode = 'eval'
+	mode = 'train'
 
 	#  Define model
 	model = eval(conf.model_name)(conf)

@@ -51,7 +51,7 @@ class CodeSearcher:
 			db="githubreposfile",
 		)
 		cursor = conn.cursor()
-		sql = "select methindex, tokensindex, descindex, apiseq from repos2indexstar20 "
+		sql = "select methindex, tokensindex, descindex, apiseq from star20index "
 
 		cursor.execute(sql)
 		conn.commit()

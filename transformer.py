@@ -85,7 +85,7 @@ class layerNorm(Layer):
 		# std = tf.math.reduce_std(x, axis=-1, keepdims=True)
 		mean, var = tf.nn.moments(x, axes=-1, keepdims=True)
 		std = tf.sqrt(var + self.eps)
-		return self.a * ((x - mean) / std) + self.b
+		return self.a * ((x - mean) / (std + 256) + self.b)
 		# return (x - mean) / (std + self.eps)
 
 

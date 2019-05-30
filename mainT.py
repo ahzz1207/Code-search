@@ -15,7 +15,7 @@ import threading
 from utils import normalize, cos_np_for_normalized
 from modelsT import *
 import os
-os.environ['CUDA_VISIBLE_DEVICES']='1'
+os.environ['CUDA_VISIBLE_DEVICES']='0'
 
 class CodeSearcher:
 	def __init__(self, conf):
