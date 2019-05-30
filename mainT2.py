@@ -18,7 +18,7 @@ import threading
 from utils import normalize, cos_np_for_normalized, cos_np
 from models import *
 import pymysql
-os.environ['CUDA_VISIBLE_DEVICES']='0'
+# os.environ['CUDA_VISIBLE_DEVICES']='0'
 
 class CodeSearcher:
 	def __init__(self, conf):
@@ -52,21 +52,18 @@ class CodeSearcher:
 		)
 		cursor = conn.cursor()
 		sql = "select methindex, tokensindex, descindex, apiseq from repos2indexstar20 "
-		try:
-			cursor.execute(sql)
-			conn.commit()
-			data = cursor.fetchall()
-			random.shuffle(data)
-			for row in data:
-				self.vocab_methname2.append(row[0])
-				self.vocab_tokens2.append(row[1])
-				self.vocab_desc2.append(row[2])
-				self.vocab_apiseq2.append(row[3])
-			if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
-				self.data_len = len(data)
-				print("All index init succes, it's length ：%d"%len(data))
-		except:
-			conn.rollback()
+
+		cursor.execute(sql)
+		conn.commit()
+		data = cursor.fetchall()
+		for row in data:
+			self.vocab_methname2.append(row[0])
+			self.vocab_tokens2.append(row[1])
+			self.vocab_desc2.append(row[2])
+			self.vocab_apiseq2.append(row[3])
+		if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
+			self.data_len = len(data)
+			print("All index init succes, it's length ：%d"%len(data))
 		cursor.close()
 		conn.close()
 

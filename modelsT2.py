@@ -185,8 +185,8 @@ class JointEmbeddingModel:
 		self.training_model.summary()
 
 	def compile(self, optimizer, **kwargs):
-		optimizer = keras.optimizers.SGD(lr=0.0001, momentum=0.9, nesterov=True)
-		# optimizer = keras.optimizers.Adam(lr=0.0001)
+		# optimizer = keras.optimizers.SGD(lr=0.0001, momentum=0.9, nesterov=True)
+		optimizer = keras.optimizers.Adam(lr=0.001)
 		# print(self.code_repr_model.layers, self.desc_repr_model.layers, self.training_model.layers, self.sim_model.layers)
 		self.code_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
 		self.desc_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
