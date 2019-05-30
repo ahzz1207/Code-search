@@ -86,7 +86,7 @@ class layerNorm(Layer):
 		mean, var = tf.nn.moments(x, axes=-1, keepdims=True)
 		std = tf.sqrt(var + self.eps)
 		#  0.1 *
-		return self.a * ((x - mean) / std) + self.b
+		return 0.5 * self.a * ((x - mean) / std) + self.b
 		# return (x - mean) / (std + self.eps)
 
 
@@ -206,7 +206,7 @@ class EncoderModel(Layer):
 		self.feedForward = positionFeedForward(model_dim, name, ffn_dim)
 		self.vocab_embed = Embedding(embed_dim, vocab_size, name)
 		self.position_embed = positionEmbedding(embed_dim, max_len, name, droput_rate)
-		self.encoder = encoder(model_dim, self.attention, self.feedForward, name, droput_rate, n_layers=4)
+		self.encoder = encoder(model_dim, self.attention, self.feedForward, name, droput_rate, n_layers=2)
 
 	def call(self, inputs):
 		vocab_embed = self.vocab_embed(inputs)

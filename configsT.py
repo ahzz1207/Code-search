@@ -47,8 +47,8 @@ class conf:
         self.n_eval = 100
         self.save_every = 20
         self.reload = 0
-        self.embed_dims = 256
-        self.hidden_dims = 256
+        self.embed_dims = 512
+        self.hidden_dims = 512
         self.lstm_dims = 1024
 
         self.margin = 0.05

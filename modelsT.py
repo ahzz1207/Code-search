@@ -46,12 +46,12 @@ class JointEmbeddingModel:
 
 		self.transformer_meth = transformer.EncoderModel(vocab_size=self.vocab_size, model_dim=self.hidden_dims,
 		                                                 embed_dim=self.embed_dims, ffn_dim=self.lstm_dims,
-		                                                 droput_rate=0.2, n_heads=2, max_len=self.meth_name_len,
+		                                                 droput_rate=0.2, n_heads=8, max_len=self.meth_name_len,
 		                                                 name='methT')
 
 		self.transformer_apiseq = transformer.EncoderModel(vocab_size=self.vocab_size, model_dim=self.hidden_dims,
 		                                                   embed_dim=self.embed_dims, ffn_dim=self.lstm_dims,
-		                                                   droput_rate=0.2, n_heads=4, max_len=self.apiseq_len,
+		                                                   droput_rate=0.2, n_heads=8, max_len=self.apiseq_len,
 		                                                   name='apiseqT')
 
 		self.transformer_desc = transformer.EncoderModel(vocab_size=self.vocab_size, model_dim=self.hidden_dims,
@@ -158,7 +158,7 @@ class JointEmbeddingModel:
 
 	def compile(self, optimizer, **kwargs):
 		# optimizer = keras.optimizers.SGD(lr=0.0001, momentum=0.9, nesterov=True)
-		optimizer = keras.optimizers.Adam(lr=0.01)
+		optimizer = keras.optimizers.Adam(lr=0.001)
 		# print(self.code_repr_model.layers, self.desc_repr_model.layers, self.training_model.layers, self.sim_model.layers)
 		self.code_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
 		self.desc_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)

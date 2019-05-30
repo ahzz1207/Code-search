@@ -1,10 +1,9 @@
-import os
 import tensorflow as tf
-from tensorflow.python.keras.backend import set_session
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth=True
-session = tf.compat.v1.Session(config=config)
-set_session(session)
+# from tensorflow.python.keras.backend import set_session
+# config = tf.compat.v1.ConfigProto()
+# config.gpu_options.allow_growth=True
+# session = tf.compat.v1.Session(config=config)
+# set_session(session)
 import pickle
 import tables
 import configsT
@@ -15,7 +14,8 @@ import traceback
 import threading
 from utils import normalize, cos_np_for_normalized
 from modelsT import *
-os.environ['CUDA_VISIBLE_DEVICES']='0'
+import os
+os.environ['CUDA_VISIBLE_DEVICES']='1'
 
 class CodeSearcher:
 	def __init__(self, conf):
