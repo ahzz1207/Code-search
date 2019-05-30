@@ -223,7 +223,7 @@ def getVocab():
 	methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, cf.n_words)
 	token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, cf.n_words)
 	desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, cf.n_words)
-	apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, cf.n_words)
+	apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, cf.api_words) # api词表大小和其他的不一样
 
 	# 以上这些特征可以转为编号后重新写入数据库
 	methNamesNum = []
