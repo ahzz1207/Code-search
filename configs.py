@@ -28,6 +28,7 @@ class conf:
         self.tokens_len = 50
         self.desc_len = 30
         self.n_words = 10000  # the size of vocab
+        self.api_words = 50000  # api词表大小
 
         # vocab_methname
         self.vocab_methname = 'vocab.methname.pkl'
