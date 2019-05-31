@@ -43,7 +43,7 @@ class conf:
         self.nb_epoch = 200
         self.validation_split = 0.2
         self.optimizer = 'adam'  ##学习率默认0.01
-        self.valid_every = None
+        self.valid_every = 15
         self.n_eval = 100
         self.save_every = 20
         self.reload = 0
