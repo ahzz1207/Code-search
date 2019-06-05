@@ -41,13 +41,13 @@ class conf:
 
         self.batch_size = 128
         self.chunk_size = 160000  ## load all data
-        self.nb_epoch = 200
+        self.nb_epoch = 500
         self.validation_split = 0.2
         self.optimizer = 'adam'  ##学习率默认0.01
         self.valid_every = 15
         self.n_eval = 100
         self.save_every = 20
-        self.reload = 0
+        self.reload = 493
 
         self.embed_dims = 100
         self.hidden_dims = 400

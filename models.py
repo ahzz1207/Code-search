@@ -139,23 +139,23 @@ class JointEmbeddingModel:
         dropout = Dropout(0.25, name='dropout_tokens_embed')
         tokens_dropout = dropout(tokens_embedding)
 
-        # forward rnn
-        fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_tokens_fw')
-
-        # backward rnn
-        bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_tokens_bw')
-
-        tokens_fw = fw_rnn(tokens_dropout)
-        tokens_bw = bw_rnn(tokens_dropout)
-
-        dropout = Dropout(0.25, name='dropout_tokens_rnn')
-        tokens_fw_dropout = dropout(tokens_fw)
-        tokens_bw_dropout = dropout(tokens_bw)
+        # # forward rnn
+        # fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_tokens_fw')
+		#
+        # # backward rnn
+        # bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_tokens_bw')
+		#
+        # tokens_fw = fw_rnn(tokens_dropout)
+        # tokens_bw = bw_rnn(tokens_dropout)
+		#
+        # dropout = Dropout(0.25, name='dropout_tokens_rnn')
+        # tokens_fw_dropout = dropout(tokens_fw)
+        # tokens_bw_dropout = dropout(tokens_bw)
 
         # max pooling
         maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]), name='maxpooling_tokens')
-        tokens_pool = Concatenate(name='concat_tokens_lstm')([maxpool(tokens_fw_dropout), maxpool(tokens_bw_dropout)])
-        # tokens_pool = maxpool(tokens_dropout)
+        # tokens_pool = Concatenate(name='concat_tokens_lstm')([maxpool(tokens_fw_dropout), maxpool(tokens_bw_dropout)])
+        tokens_pool = maxpool(tokens_dropout)
         activation = Activation('tanh', name='active_tokens')
         tokens_repr = activation(tokens_pool)
 
@@ -236,7 +236,7 @@ class JointEmbeddingModel:
 
         self.training_model.summary()
     def compile(self, optimizer, **kwargs):
-        optimizer = optimizers.Adam(lr=0.001)
+        optimizer = optimizers.Adam(lr=0.0002)
         self.code_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
         self.desc_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
         self.training_model.compile(loss=lambda y_true, y_pred: y_pred+y_true-y_true, optimizer=optimizer, **kwargs)

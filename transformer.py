@@ -10,7 +10,7 @@ import math
 # input -> Nonelength
 class Embedding(Layer):
 	def __init__(self, units, vocab_size, name):
-		super(Embedding, self).__init__(name=name+'embed')
+		super(Embedding, self).__init__(name=name + 'embed')
 		self.model_dim = units
 		self.embdding = layers.Embedding(input_dim=vocab_size, output_dim=units, mask_zero=False)
 		# self.lookup = self.add_weight(name='lookup', shape=[vocab_size, self.model_dim], initializer="random_normal")
@@ -23,6 +23,7 @@ class Embedding(Layer):
 
 		return embdding
 
+
 # None,length -> None,length,512 / sqr(512)
 
 
@@ -32,40 +33,51 @@ class Embedding(Layer):
 class positionFeedForward(Layer):
 	# just two layer feedforward
 	def __init__(self, model_dim, name, ffn_dim=512, droput=0.2):
-		super(positionFeedForward, self).__init__(name=name+'FFN')
-		self.dense1 = layers.Dense(ffn_dim, 'relu')
+		super(positionFeedForward, self).__init__(name=name + 'FFN')
+		self.dense1 = layers.Dense(ffn_dim, 'tanh')
 		self.dense2 = layers.Dense(model_dim)
 		self.dropout = droput
 
 	def call(self, inputs):
 		return self.dense2(tf.nn.dropout(self.dense1(inputs), self.dropout))
+
+
 # None,length,512 -> None,length,512
 
 
 class positionEmbedding(Layer):
 	def __init__(self, model_dim, max_len, name, dropout=0.2):
-		super(positionEmbedding, self).__init__(name=name+'poEmbed')
+		super(positionEmbedding, self).__init__(name=name + 'poEmbed')
 		self.model_dim = model_dim
 		self.dropout = dropout
 		self.max_len = max_len
-		self.pe = np.zeros([max_len, model_dim])
-		self.position = np.arange(0, max_len)
-		self.position = np.expand_dims(self.position, axis=1)  # max_len,1
-		cons = -(math.log(10000.0) / model_dim)
-		self.div_term = np.exp(np.arange(0, model_dim, 2) * cons)
-		self.pe[:, 0::2] = np.sin(self.position * self.div_term)
-		self.pe[:, 1::2] = np.cos(self.position * self.div_term)
-		self.pe = np.expand_dims(self.pe, 0)
+		# position = tf.tile(tf.expand_dims(tf.range(max_len), 0), [128, 1])  # Batch, length
+		position_enc = np.array([[pos / np.power(10000, 2. * i / model_dim) for i in range(model_dim)]
+		                         for pos in range(max_len)])  # length. dim
+		position_enc[:, 0::2] = np.sin(position_enc[:, 0::2])  # dim 2i
+		position_enc[:, 1::2] = np.cos(position_enc[:, 1::2])  # dim 2i+1
+		position_enc = np.expand_dims(position_enc, 0)
+		# zero pad
+		# pad = np.zeros([1, model_dim])
+		# position_enc = tf.concat((pad, position_enc), axis=0)
+
+
+		# self.position = np.arange(0, max_len)
+		# self.position = np.expand_dims(self.position, axis=1)  # max_len,1
+		# cons = -(math.log(10000.0) / model_dim)
+		# self.div_term = np.exp(np.arange(0, model_dim, 2) * cons)
+		# self.pe[:, 0::2] = np.sin(self.position * self.div_term)
+		# self.pe[:, 1::2] = np.cos(self.position * self.div_term)
+		# self.pe = np.expand_dims(self.pe, 0)
 		# self.pe = np.tile(self.pe, [128, 1, 1])
-		self.pe = tf.Variable(self.pe, trainable=False, dtype=tf.float32)
-		# self.scale = model_dim ** 0.5
-		# max_len, model_dim
-		# self.pe = np.expand_dims(self.pe, axis=0)
+
+		self.pe = tf.Variable(position_enc, trainable=False, dtype=tf.float32)
+	# max_len, model_dim
 
 	def call(self, x):
 		# out = tf.expand_dims(tf.range(int(x.shape[1])), 0)
 		# x = tf.tile(x, [128, 1, 1])
-		#
+		# out = tf.nn.embedding_lookup(self.pe, x)
 		# out = tf.nn.embedding_lookup(self.pe, posi_ID)
 		x = x + self.pe
 		# None,length, model_dim
@@ -75,7 +87,7 @@ class positionEmbedding(Layer):
 # layer normlize
 class layerNorm(Layer):
 	def __init__(self, name, model_dim):
-		super(layerNorm, self).__init__(name=name+'layerNorm')
+		super(layerNorm, self).__init__(name=name + 'layerNorm')
 		self.eps = 1e-8
 		self.a = tf.Variable(tf.ones(model_dim))
 		self.b = tf.Variable(tf.zeros(model_dim))
@@ -85,8 +97,8 @@ class layerNorm(Layer):
 		# std = tf.math.reduce_std(x, axis=-1, keepdims=True)
 		mean, var = tf.nn.moments(x, axes=-1, keepdims=True)
 		std = tf.sqrt(var + self.eps)
-		return 0.5 * self.a * ((x - mean) / (std) + self.b)
-		# return (x - mean) / (std + self.eps)
+		return 0.5 * self.a * (x - mean) / (std + self.eps) + self.b
+# return (x - mean) / (std + self.eps)
 
 
 # A encoder layer
@@ -94,7 +106,7 @@ class layerNorm(Layer):
 # shape have no changed!
 class encoder_layer(Layer):
 	def __init__(self, hidden, self_atten, feed_forward, dropout, name):
-		super(encoder_layer, self).__init__(name=name+'encoder_layer')
+		super(encoder_layer, self).__init__(name=name + 'encoder_layer')
 		self.self_atten = self_atten
 		self.hidden = hidden
 		self.feed_forward = feed_forward
@@ -115,8 +127,9 @@ class encoder_layer(Layer):
 # stack encoder_layer to the encoder
 class encoder(Layer):
 	def __init__(self, hidden, self_atten, feed_forward, name, dropout=0.2, n_layers=8):
-		super(encoder, self).__init__(name=name+'encoder')
-		self.encoder_layers = [encoder_layer(hidden, self_atten, feed_forward, dropout, name=str(i)) for i in range(n_layers)]
+		super(encoder, self).__init__(name=name + 'encoder')
+		self.encoder_layers = [encoder_layer(hidden, self_atten, feed_forward, dropout, name=str(i)) for i in
+		                       range(n_layers)]
 		self.n_layers = n_layers
 		self.norm = layerNorm(name, hidden)
 
@@ -132,11 +145,11 @@ class encoder(Layer):
 # q == k == v == inputs -> dim does'nt changed
 class self_atten(Layer):
 	def __init__(self, n_heads, model_dim, name, dropout=0.1):
-		super(self_atten, self).__init__(name=name+'atten')
+		super(self_atten, self).__init__(name=name + 'atten')
 		# Make sure that inputs can split to n_heads*batch, model_dim/n_heads successful.
 		assert model_dim % n_heads == 0
 		self.head_dim = model_dim // n_heads
-		self.linears = [layers.Dense(model_dim, activation='relu') for _ in range(4)]
+		self.linears = [layers.Dense(model_dim, activation='tanh') for _ in range(4)]
 		self.n_heads = n_heads
 		self.model_dim = model_dim
 		self.dropout = dropout
@@ -150,17 +163,17 @@ class self_atten(Layer):
 		key = key / term
 		atten_weight = tf.matmul(query, key)
 		# None, n_heads, length, length
-		# if src_mask is not None:
-		# 	mask = tf.expand_dims(src_mask, 1)
-		# 	mask = tf.tile(mask, [1, self.n_heads, 1, 1])
-		# 	# MIN_VALUE = tf.constant(-1e9, shape=(query.shape[0], atten_weight.shape[1:]))
-		# 	MIN_VALUE = tf.fill(atten_weight.shape, value=-1e9)
-		# 	atten_weight = tf.where(tf.equal(mask, 1), atten_weight, MIN_VALUE)
+		if src_mask is not None:
+			mask = tf.expand_dims(src_mask, 1)
+			mask = tf.tile(mask, [1, self.n_heads, 1, 1])
+			self.MIN_VALUE = tf.constant(-1e9, shape=[128] + list(atten_weight.shape[1:]), dtype=tf.float32)
+			atten_weight = tf.where(mask, atten_weight, self.MIN_VALUE)
 
 		output = tf.nn.softmax(atten_weight, axis=-1)
 		output = tf.matmul(output, value)  # None, n_heads, length, dim/n_heads
 		return output
-		# None,length, n_heads, dim/n_heads
+
+	# None,length, n_heads, dim/n_heads
 
 	def call(self, query, mask):
 		# split heads
@@ -176,7 +189,7 @@ class self_atten(Layer):
 		output = tf.reshape(output, (-1, query.shape[2], self.model_dim))
 		# print(output.shape)
 		return self.linears[-1](output)
-		# None,length, model_dim
+# None,length, model_dim
 
 
 def getMask(inputs):
@@ -186,7 +199,7 @@ def getMask(inputs):
 	# self.src_mask = tf.tile(self.src_mask, [1, src.shape[1], 1])  # None, length, length
 	src_mask2 = tf.transpose(src_mask, [0, 2, 1])  # None, 1, length
 	src_mask = src_mask & src_mask2  # None, length, length
-	src_mask = tf.cast(src_mask, dtype=tf.float32)
+	# src_mask = tf.cast(src_mask, dtype=tf.float32)
 	# self.src_mask = tf.reshape(self.src_mask, [-1, src.shape[1], src.shape[1]])  # None, length, length,
 	return src_mask
 
@@ -200,7 +213,7 @@ class EncoderModel(Layer):
 		self.n_heads = n_heads
 		self.ffn_dim = ffn_dim
 		self.droput_rate = droput_rate
-		print('init the '+name)
+		print('init the ' + name)
 		self.attention = self_atten(n_heads, model_dim, name, droput_rate)
 		self.feedForward = positionFeedForward(model_dim, name, ffn_dim)
 		self.vocab_embed = Embedding(embed_dim, vocab_size, name)
@@ -212,4 +225,3 @@ class EncoderModel(Layer):
 		position_embed = self.position_embed(vocab_embed)
 		outputs = self.encoder(position_embed, mask=getMask(inputs))
 		return outputs
-

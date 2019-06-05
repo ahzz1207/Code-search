@@ -46,7 +46,7 @@ class conf:
         self.valid_every = 15
         self.n_eval = 100
         self.save_every = 20
-        self.reload = 0
+        self.reload = 8
         self.embed_dims = 512
         self.hidden_dims = 512
         self.lstm_dims = 1024

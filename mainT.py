@@ -9,19 +9,20 @@ import traceback
 import threading
 from utils import normalize, cos_np_for_normalized
 from modelsT import *
+# from tensorflow.python.keras.backend import set_session
+# config = tf.compat.v1.ConfigProto()
+# config.gpu_options.allow_growth = True
+# session = tf.compat.v1.Session(config=config)
+# set_session(session)
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-from tensorflow.python.keras.backend import set_session
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth=True
-session = tf.compat.v1.Session(config=config)
-set_session(session)
-
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 class CodeSearcher:
 	def __init__(self, conf):
 		self.conf = conf
 		self.path = self.conf.data_dir
+
+		self.vocab_desc = self.load_pickle(self.path + self.conf.vocab_desc)
 		self.code_base = None
 		self.code_base_chunksize = 1000000
 		self.code_reprs = None
@@ -84,9 +85,9 @@ class CodeSearcher:
 		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs
 
 	def load_use_data(self):
-		methnames = self.load_hdf5(self.path + self.conf.valid_methodname, 0, -1)
-		apiseq = self.load_hdf5(self.path + self.conf.valid_apiseq, 0, -1)
-		tokens = self.load_hdf5(self.path + self.conf.valid_tokens, 0, -1)
+		methnames = self.load_hdf5(self.path + self.conf.use_methodname, 0, -1)
+		apiseq = self.load_hdf5(self.path + self.conf.use_apiseq, 0, -1)
+		tokens = self.load_hdf5(self.path + self.conf.use_tokens, 0, -1)
 		return methnames, apiseq, tokens
 
 	def load_codebase(self):
@@ -101,7 +102,7 @@ class CodeSearcher:
 	def load_code_reprs(self):
 		if self.code_reprs == None:
 			codereprs = []
-			h5f = tables.open_file("d:/data/" + self.conf.use_codevecs)
+			h5f = tables.open_file(self.conf.use_codevecs)
 			vecs = h5f.root.vecs
 			for i in range(0, len(vecs), self.code_base_chunksize):
 				codereprs.append(vecs[i: i + self.code_base_chunksize])
@@ -111,7 +112,7 @@ class CodeSearcher:
 
 	def save_code_reprs(self, vecs):
 		npvecs = np.array(vecs)
-		fvec = tables.open_file("d:/data/" + self.conf.use_codevecs, 'w')
+		fvec = tables.open_file(self.conf.use_codevecs, 'w')
 		atom = tables.Atom.from_dtype(npvecs.dtype)
 		filters = tables.Filters(complib='blosc', complevel=5)
 		ds = fvec.create_carray(fvec.root, 'vecs', atom, npvecs.shape, filters=filters)
@@ -132,22 +133,22 @@ class CodeSearcher:
 		return pad_sequences(data, maxlen=len, padding='post', truncating='post', value=0)
 
 	def save_model_epoch(self, model, epoch):
-		if not os.path.exists(self.path + 'models22/transformer5/' + self.conf.model_name + '/'):
-			os.makedirs(self.path + 'models22/transformer5/' + self.conf.model_name + '/')
+		if not os.path.exists(self.path + 'models22/transformer6/' + self.conf.model_name + '/'):
+			os.makedirs(self.path + 'models22/transformer6/' + self.conf.model_name + '/')
 
-		model.save("{}models22/transformer5/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models22/transformer5/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
+		model.save("{}models22/transformer6/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models22/transformer6/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
 		           overwrite=True)
 
 	def load_model_epoch(self, model, epoch):
 		assert os.path.exists(
-			"{}models22/transformer5/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
+			"{}models22/transformer6/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
 			, "Weights at epoch {:d} not found".format(epoch)
 		assert os.path.exists(
-			"{}models22/transformer5/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch)) \
+			"{}models22/transformer6/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch)) \
 			, "Weights at epoch {:d} not found".format(epoch)
-		model.load("{}models22/transformer5/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models22/transformer5/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
+		model.load("{}models22/transformer6/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models22/transformer6/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
 		print("Load model %epoch" % epoch)
 
 	def save_model2_epoch(self, model, epoch):
@@ -210,9 +211,9 @@ class CodeSearcher:
 
 			print('Best: Loss = {}, Epoch = {}'.format(val_loss['loss'], val_loss['epoch']))
 
-			if valid_every is not None and i % valid_every == 0:
-				acc1, mrr = self.valid(model, 1000, 1)
-				print(acc1, mrr)
+			# if valid_every is not None and i % valid_every == 0:
+			# 	acc1, mrr = self.valid(model, 1000, 1)
+			# 	print(acc1, mrr)
 
 
 
@@ -353,7 +354,7 @@ class CodeSearcher:
 		apiseqs = self.pad(apiseqs, self.conf.apiseq_len)
 		tokens = self.pad(tokens, self.conf.tokens_len)
 		print(methnames.shape)
-		vecs = model.repr_code([methnames, apiseqs, tokens], batch_size=1000)
+		vecs = model.repr_code([methnames, apiseqs, tokens], batch_size=2000)
 		vecs = vecs.astype('float32')
 		vecs = normalize(vecs)
 		self.save_code_reprs(vecs)
@@ -428,8 +429,8 @@ if __name__ == '__main__':
 		# evaluate for a particular epoch
 		# load model
 		if conf.reload > 0:
-			codesearcher.load_model2_epoch(model, conf.reload)
-		acc, mrr, map, ndcg = codesearcher.eval(model, 128, 10)
+			codesearcher.load_model_epoch(model, conf.reload)
+		acc, mrr, map, ndcg = codesearcher.eval(model, 2000, 10)
 		print("Eval result is :")
 		print(acc, mrr, map, ndcg)
 

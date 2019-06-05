@@ -84,7 +84,7 @@ def dfs(ast, root, path, totalpath):
 		path.append(root["type"])
 		for child in root["children"]:
 			dfs(ast, ast[child], path, totalpath)
-			path.pop()
+		path.pop()
 	else:
 		# path.append(root["value"])
 		# code2seq中叶节点内容不包含在path中 而是subtoken
