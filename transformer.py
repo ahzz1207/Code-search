@@ -33,11 +33,11 @@ class Embedding(Layer):
 # input -> None,length, 512
 class positionFeedForward(Layer):
 	# just two layer feedforward
-	def __init__(self, model_dim, name, ffn_dim=512, droput=0.2):
+	def __init__(self, model_dim, name, ffn_dim=512, dropout=0.2):
 		super(positionFeedForward, self).__init__(name=name + 'FFN')
 		self.dense1 = layers.Dense(ffn_dim, 'relu')
 		self.dense2 = layers.Dense(model_dim)
-		self.dropout = droput
+		self.dropout = dropout
 
 	def call(self, inputs):
 		return self.dense2(tf.nn.dropout(self.dense1(inputs), self.dropout))
@@ -54,14 +54,13 @@ class positionEmbedding(Layer):
 		self.max_len = max_len
 		# position = tf.tile(tf.expand_dims(tf.range(max_len), 0), [128, 1])  # Batch, length
 		position_enc = np.array([[pos / np.power(10000, 2. * i / model_dim) for i in range(model_dim)]
-		                         for pos in range(max_len)])  # length. dim
+		                         for pos in range(max_len)])  # length dim
 		position_enc[:, 0::2] = np.sin(position_enc[:, 0::2])  # dim 2i
 		position_enc[:, 1::2] = np.cos(position_enc[:, 1::2])  # dim 2i+1
 		position_enc = np.expand_dims(position_enc, 0)
 		# zero pad
 		# pad = np.zeros([1, model_dim])
 		# position_enc = tf.concat((pad, position_enc), axis=0)
-
 
 		# self.position = np.arange(0, max_len)
 		# self.position = np.expand_dims(self.position, axis=1)  # max_len,1
@@ -70,9 +69,10 @@ class positionEmbedding(Layer):
 		# self.pe[:, 0::2] = np.sin(self.position * self.div_term)
 		# self.pe[:, 1::2] = np.cos(self.position * self.div_term)
 		# self.pe = np.expand_dims(self.pe, 0)
-		 # self.pe = np.tile(self.pe, [128, 1, 1])
+		# self.pe = np.tile(self.pe, [128, 1, 1])
 
 		self.pe = tf.Variable(position_enc, trainable=False, dtype=tf.float32)
+
 	# max_len, model_dim
 
 	def call(self, x):
@@ -101,6 +101,8 @@ class layerNorm(Layer):
 		mean, var = tf.nn.moments(x, axes=-1, keepdims=True)
 		std = tf.sqrt(var + self.eps)
 		return 0.5 * self.a * (x - mean) / (std + self.eps) + self.b
+
+
 # return (x - mean) / (std + self.eps)
 
 
@@ -137,11 +139,11 @@ class encoder(Layer):
 		self.norm = layerNorm(name, hidden)
 
 	def call(self, x, mask):
-		self.out = x
+		out = x
 		for i in range(self.n_layers):
-			self.out = self.encoder_layers[i](self.out, mask=mask)
+			out = self.encoder_layers[i](out, mask=mask)
 
-		return self.norm(self.out)
+		return self.norm(out)
 
 
 # muti_head self_attention
@@ -169,8 +171,8 @@ class self_atten(Layer):
 		if src_mask is not None:
 			mask = tf.expand_dims(src_mask, 1)
 			mask = tf.tile(mask, [1, self.n_heads, 1, 1])
-			self.MIN_VALUE = tf.constant(-2**32 + 1, shape=[128] + list(atten_weight.shape[1:]), dtype=tf.float32)
-			atten_weight = tf.where(mask, atten_weight, self.MIN_VALUE)
+			MIN_VALUE = tf.constant(-2 ** 32 + 1, shape=[128] + list(atten_weight.shape[1:]), dtype=tf.float32)
+			atten_weight = tf.where(mask, atten_weight, MIN_VALUE)
 
 		output = tf.nn.softmax(atten_weight, axis=-1)
 		output = tf.matmul(output, value)  # None, n_heads, length, dim/n_heads
@@ -192,6 +194,8 @@ class self_atten(Layer):
 		output = tf.reshape(output, (-1, query.shape[2], self.model_dim))
 		# print(output.shape)
 		return self.linears[-1](output)
+
+
 # None,length, model_dim
 
 
@@ -215,7 +219,7 @@ class EncoderModel(Layer):
 		self.vocab_size = vocab_size
 		self.n_heads = n_heads
 		self.ffn_dim = ffn_dim
-		self.droput_rate = droput_rate
+		self.dropout_rate = droput_rate
 		print('init the ' + name)
 		self.attention = self_atten(n_heads, model_dim, name, droput_rate)
 		self.feedForward = positionFeedForward(model_dim, name, ffn_dim)

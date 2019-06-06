@@ -186,7 +186,8 @@ def getVocab():
 		charset='utf8'
 	)
 	cursor = connect.cursor()
-	sql = "SELECT id, methName, tokens, comments, apiseq, ast, newapiseq FROM reposfile_new"
+	# sql = "SELECT id, methName, tokens, comments, apiseq, newapiseq FROM reposfile_new"
+	sql = "SELECT ast FROM reposfile_new"
 	cursor.execute(sql)
 	data = cursor.fetchall()
 
@@ -200,81 +201,81 @@ def getVocab():
 	# todo: 绑定id
 	ids = []
 	for i in range(len(data)):
-		ids.append(int(data[i][0]))
-		methName = str(data[i][1])
-		methNames.append(methName)
+		# ids.append(int(data[i][0]))
+		# methName = str(data[i][1])
+		# methNames.append(methName)
+		#
+		# token = str(data[i][2])
+		# tokens.append(token)
+		#
+		# desc = str(data[i][3])
+		# descs.append(desc)
+		#
+		# apiseq = str(data[i][4])
+		# apiseqs.append(apiseq)
+		#
+		# if data[i][5]:
+		# 	apiseqnew = str(data[i][5])
+		# 	newapiseq.append(apiseqnew)
+		# else:
+		# 	newapiseq.append("%%%%")
 
-		token = str(data[i][2])
-		tokens.append(token)
-
-		desc = str(data[i][3])
-		descs.append(desc)
-
-		apiseq = str(data[i][4])
-		apiseqs.append(apiseq)
-
-		if data[i][6]:
-			apiseqnew = str(data[i][6])
-			newapiseq.append(apiseqnew)
-		else:
-			newapiseq.append("%%%%")
-
-		ast = str(data[i][5])
+		ast = str(data[i][0])
 		# 这一步替换注
 		# ast = ast.replace("children:", "\"children\":").replace("index:", "\"index\":").replace("value:", "\"value\":").replace("type:", "\"type\":")
 		ast = str2list(ast)
 		asts.append(ast)
-
+	length = len(data)
 	data = []
 	cf = configs.conf()
+	print(length)
 
-	methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, cf.n_words)
-	token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, cf.n_words)
-	desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, cf.n_words)
-	apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, cf.api_words)  # api词表大小和其他的不一样
-	apiseqnew_vocab_to_int, apiseqnew_int_to_vocab = getVocabForOther(newapiseq, cf.new_api_words)
+	# methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, cf.n_words)
+	# token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, cf.n_words)
+	# desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, cf.n_words)
+	# apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, cf.api_words)  # api词表大小和其他的不一样
+	# apiseqnew_vocab_to_int, apiseqnew_int_to_vocab = getVocabForOther(newapiseq, cf.new_api_words)
 
 	# 以上这些特征可以转为编号后重新写入数据库
-	methNamesNum = []
-	for methName in methNames:
-		methNamesNum.append(toNum(methName, methName_vocab_to_int))
-
-	tokensNum = []
-	for token in tokens:
-		tokensNum.append(toNum(token, token_vocab_to_int))
-
-	descsNum = []
-	for desc in descs:
-		descsNum.append(toNum(desc, desc_vocab_to_int))
-
-	apiseqsNum = []
-	for apiseq in apiseqs:
-		apiseqsNum.append(toNum(apiseq, apiseq_vocab_to_int))
-
-	apiseqnewNum = []
-	for apiseqn in newapiseq:
-		if apiseqn == "%%%%":
-			apiseqnewNum.append([-10])
-		else:
-			apiseqnewNum.append(toNum(apiseqn, apiseqnew_vocab_to_int))
-
-
-	assert len(methNamesNum) == len(tokensNum) == len(descsNum) == len(apiseqsNum)
-	sql = "INSERT INTO repos2index values (%s,%s,%s,%s,%s,%s)"
-	failed = 0
-	for i in range(len(data)):
-		m, t, d, a, q = list2int(methNamesNum[i]), list2int(tokensNum[i]), list2int(descsNum[i]), list2int(apiseqsNum[i]), list2int(apiseqnewNum[i])
-		try:
-			cursor.execute(sql, (ids[i], m, t, d, a, q))
-			connect.commit()
-		except Exception as e:
-			print(e)
-			connect.rollback()
-			print("insert failed")
-			failed += 1
-	cursor.close()
-	connect.close()
-	print("insert failed number is: %d" % failed)
+	# methNamesNum = []
+	# for methName in methNames:
+	# 	methNamesNum.append(toNum(methName, methName_vocab_to_int))
+	#
+	# tokensNum = []
+	# for token in tokens:
+	# 	tokensNum.append(toNum(token, token_vocab_to_int))
+	#
+	# descsNum = []
+	# for desc in descs:
+	# 	descsNum.append(toNum(desc, desc_vocab_to_int))
+	#
+	# apiseqsNum = []
+	# for apiseq in apiseqs:
+	# 	apiseqsNum.append(toNum(apiseq, apiseq_vocab_to_int))
+	#
+	# apiseqnewNum = []
+	# for apiseqn in newapiseq:
+	# 	if apiseqn == "%%%%":
+	# 		apiseqnewNum.append([-10])
+	# 	else:
+	# 		apiseqnewNum.append(toNum(apiseqn, apiseqnew_vocab_to_int))
+	#
+	#
+	# assert len(methNamesNum) == len(tokensNum) == len(descsNum) == len(apiseqsNum)
+	# sql = "INSERT INTO repos2index values (%s,%s,%s,%s,%s,%s)"
+	# failed = 0
+	# for i in range(length):
+	# 	m, t, d, a, q = list2int(methNamesNum[i]), list2int(tokensNum[i]), list2int(descsNum[i]), list2int(apiseqsNum[i]), list2int(apiseqnewNum[i])
+	# 	try:
+	# 		cursor.execute(sql, (ids[i], m, t, d, a, q))
+	# 	except Exception as e:
+	# 		print(e)
+	# 		print("insert failed")
+	# 		failed += 1
+	# cursor.close()
+	# connect.commit()
+	# connect.close()
+	# print("insert failed number is: %d" % failed)
 
 	ast_vocab_to_int, ast_int_to_vocab = getVocabForAST(asts, cf.n_words)
 
