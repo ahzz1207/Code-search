@@ -171,7 +171,7 @@ class self_atten(Layer):
 		if src_mask is not None:
 			mask = tf.expand_dims(src_mask, 1)
 			mask = tf.tile(mask, [1, self.n_heads, 1, 1])
-			MIN_VALUE = tf.constant(-2 ** 32 + 1, shape=[128] + list(atten_weight.shape[1:]), dtype=tf.float32)
+			MIN_VALUE = tf.constant(-2 ** 32 + 1, shape=[2000] + list(atten_weight.shape[1:]), dtype=tf.float32)
 			atten_weight = tf.where(mask, atten_weight, MIN_VALUE)
 
 		output = tf.nn.softmax(atten_weight, axis=-1)
@@ -233,7 +233,7 @@ class EncoderModel(Layer):
 		#
 		pad_mask, src_mask = getMask(inputs)
 		pad_mask = tf.tile(tf.expand_dims(pad_mask, axis=2), [1, 1, self.embed_dim])
-		zero = tf.zeros([128] + list(embed.shape[1:]))
+		zero = tf.zeros([2000] + list(embed.shape[1:]))
 		embed = tf.where(tf.equal(pad_mask, False), zero, embed)
 		embed = tf.nn.dropout(embed, rate=0.1)
 		outputs = self.encoder(embed, mask=src_mask)

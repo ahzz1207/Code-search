@@ -413,7 +413,7 @@ class CodeSearcher:
 if __name__ == '__main__':
 	conf = configsT.conf()
 	codesearcher = CodeSearcher(conf)
-	mode = 'train'
+	mode = 'eval'
 
 	#  Define model
 	model = eval(conf.model_name)(conf)
