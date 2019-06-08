@@ -22,6 +22,9 @@ class JointEmbeddingModel:
 		self.tokens_len = config.tokens_len
 		self.desc_len = config.desc_len
 
+		self.astpath_len = config.astpath_len
+		self.astpath_num = config.path_num
+
 		self.vocab_size = config.n_words  # the size of vocab
 		self.embed_dims = config.embed_dims
 		self.lstm_dims = config.lstm_dims
@@ -36,6 +39,11 @@ class JointEmbeddingModel:
 		self.meth_name = Input(shape=(self.meth_name_len,), dtype='int32', name='meth_name')
 		self.apiseq = Input(shape=(self.apiseq_len,), dtype='int32', name='apiseq')
 		self.tokens = Input(shape=(self.tokens_len,), dtype='int32', name='tokens2')
+
+		self.astpath = []
+		for i in range(self.astpath_num):
+			self.astpath.append(Input(shape=(self.astpath_len,), dtype='int32', name='astpath' + str(i)))
+
 		self.desc_good = Input(shape=(self.desc_len,), dtype='int32', name='desc_good')
 		self.desc_bad = Input(shape=(self.desc_len,), dtype='int32', name='desc_bad')
 
@@ -63,12 +71,33 @@ class JointEmbeddingModel:
 		                                                   embed_dim=self.embed_dims, ffn_dim=self.lstm_dims,
 		                                                   droput_rate=0.2, n_heads=8, max_len=self.tokens_len,
 		                                                   name='tokensT')
+
+		self.transformer_astpath = []
+		for i in range(self.astpath_num):
+			self.transformer_astpath.append(
+				transformer.EncoderModel(vocab_size=self.vocab_size, model_dim=self.hidden_dims,
+										 embed_dim=self.embed_dims, ffn_dim=self.lstm_dims,
+										 dropout_rate=0.2, n_heads=8, max_len=self.astpath_len,
+										 name='astpath' + str(i))
+			)
+
 		# create path to store model Info
 
 		# 1 -- CodeNN
 		meth_name = Input(shape=(self.meth_name_len,), dtype='int32', name='meth_name')
 		apiseq = Input(shape=(self.apiseq_len,), dtype='int32', name='apiseq')
 		tokens3 = Input(shape=(self.tokens_len,), dtype='int32', name='tokens3')
+		astpath = []
+		for i in range(self.astpath_num):
+			astpath.append(Input(shape=(self.astpath_len,), dtype='int32', name='astpath' + str(i)))
+
+		# astpath
+		# embedding layer
+		astpath_out = []
+		for i in range(self.astpath_num):
+			astpath_out.append(self.transformer_astpath[i](astpath[i]))
+		# fully connection
+		astpath_fully_repr = Dense(self.hidden_dims, 'tanh', name='fully_connect_astpath')
 
 		# method name
 		# embedding layer
@@ -133,11 +162,14 @@ class JointEmbeddingModel:
 		tokens_repr = tf.reshape(tokens_repr, [128, 256])
 		# fusion method_name, apiseq, tokens
 		merge_method_name_api = Concatenate(name='merge_methname_api')([method_name_repr, apiseq_repr])
-		merge_code_repr = Concatenate(name='merge_code_repr')([merge_method_name_api, tokens_repr])
+		merge_api_token = Concatenate(name='merge_api_token')([merge_method_name_api, tokens_repr])
+
+		merge_code_repr = Concatenate(name='merge_code_repr')([merge_api_token, astpath_fully_repr])
+
 		print(merge_code_repr)
 		code_repr = Dense(self.hidden_dims, activation='tanh', name='dense_coderepr')(merge_code_repr)
 
-		self.code_repr_model = Model(inputs=[meth_name, apiseq, tokens3], outputs=[code_repr], name='code_repr_model')
+		self.code_repr_model = Model(inputs=[meth_name, apiseq, tokens3, astpath], outputs=[code_repr], name='code_repr_model')
 		self.code_repr_model.summary()
 
 		# self.output = Model(inputs=self.code_repr_model.input, outputs=self.code_repr_model.get_layer('tokensT').output)
@@ -162,13 +194,13 @@ class JointEmbeddingModel:
 		self.desc_repr_model.summary()
 
 		#  3 -- cosine similarity
-		code_repr = self.code_repr_model([meth_name, apiseq, tokens3])
+		code_repr = self.code_repr_model([meth_name, apiseq, tokens3, astpath])
 
 		desc_repr = self.desc_repr_model([desc])
 
 		cos_sim = Dot(axes=1, normalize=True, name='cos_sim')([code_repr, desc_repr])
 
-		sim_model = Model(inputs=[meth_name, apiseq, tokens3, desc], outputs=[cos_sim], name='sim_model')
+		sim_model = Model(inputs=[meth_name, apiseq, tokens3, astpath, desc], outputs=[cos_sim], name='sim_model')
 		self.sim_model = sim_model
 
 		self.sim_model.summary()
@@ -179,7 +211,7 @@ class JointEmbeddingModel:
 		loss = Lambda(lambda x: k.maximum(1e-6, self.margin - (x[0] - x[1])), output_shape=lambda x: x[0], name='loss')(
 			[good_sim, bad_sim])
 
-		self.training_model = Model(inputs=[self.meth_name, self.apiseq, self.tokens, self.desc_good, self.desc_bad],
+		self.training_model = Model(inputs=[self.meth_name, self.apiseq, self.tokens, self.astpath, self.desc_good, self.desc_bad],
 		                            outputs=[loss], name='training_model')
 
 		self.training_model.summary()

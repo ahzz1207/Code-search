@@ -18,6 +18,8 @@ import threading
 from utils import normalize, cos_np_for_normalized, cos_np
 from models import *
 import pymysql
+
+import getDataFromDatabase
 # os.environ['CUDA_VISIBLE_DEVICES']='0'
 
 class CodeSearcher:
@@ -28,11 +30,15 @@ class CodeSearcher:
 		self.vocab_apiseq = self.load_pickle(self.path + self.conf.vocab_apiseq)
 		self.vocab_tokens = self.load_pickle(self.path + self.conf.vocab_tokens)
 		self.vocab_desc = self.load_pickle(self.path + self.conf.vocab_desc)
+		self.vocab_ast = self.load_pickle(self.path + self.conf.vocab_ast)
+
 		self.vocab_methname2 = []
 		self.vocab_apiseq2 = []
 		self.vocab_tokens2 = []
 		self.vocab_desc2 = []
-		self.data_dic = {'meth':self.vocab_methname2, 'apiseq':self.vocab_apiseq2, 'tokens':self.vocab_tokens2, 'desc':self.vocab_desc2}
+		self.vocab_ast2 = []
+
+		self.data_dic = {'meth':self.vocab_methname2, 'apiseq':self.vocab_apiseq2, 'tokens':self.vocab_tokens2, 'desc':self.vocab_desc2, 'ast':self.vocab_ast2}
 		self.data_len = 0
 		self.code_base = None
 		self.code_base_chunksize = 1000000
@@ -61,6 +67,9 @@ class CodeSearcher:
 			self.vocab_tokens2.append(row[1])
 			self.vocab_desc2.append(row[2])
 			self.vocab_apiseq2.append(row[3])
+
+			self.vocab_ast2.append(row[4])
+
 		if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
 			self.data_len = len(data)
 			print("All index init succes, it's length ：%d"%len(data))
@@ -128,7 +137,8 @@ class CodeSearcher:
 		chunk_apiseq = self.get_training_data('apiseq', offset, chunk_size)
 		chunk_tokens = self.get_training_data('tokens', offset, chunk_size)
 		chunk_descs = self.get_training_data('desc', offset, chunk_size)
-		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs
+		chunk_asts = self.get_training_data('ast', offset, chunk_size)
+		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs, chunk_asts
 
 	def load_valid_data(self, chunk_size):
 		chunk_methnames = self.load_hdf5(self.path + self.conf.valid_methodname, 0, chunk_size)
@@ -244,18 +254,23 @@ class CodeSearcher:
 
 		for i in range(self.conf.reload, nb_epoch):
 			print('Epoch %d' % i, end=' ')
-			chunk_methnames, chunk_apiseqs, chunk_tokens, chunk_descs = self.load_train_data(
+			chunk_methnames, chunk_apiseqs, chunk_tokens, chunk_descs, chunk_asts = self.load_train_data(
 				i * self.conf.chunk_size, self.conf.chunk_size)
 			chunk_padded_methnames = self.pad(chunk_methnames, self.conf.methname_len)
 			chunk_padded_apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
 			chunk_padded_tokens = self.pad(chunk_tokens, self.conf.tokens_len)
+
+			ast_vocab_to_int = getDataFromDatabase.load_vocab('vocab_ast_star20.json')
+			chunk_astspaths = getDataFromDatabase.getPath(chunk_asts, self.conf.path_num, ast_vocab_to_int)
+			chunk_padded_astspaths = self.pad(chunk_astspaths, self.conf.astpath_len)
+
 			chunk_padded_good_descs = self.pad(chunk_descs, self.conf.desc_len)
 			chunk_bad_descs = [desc for desc in chunk_descs]
 			random.shuffle(chunk_bad_descs)
 			chunk_padded_bad_descs = self.pad(chunk_bad_descs, self.conf.desc_len)
 
 			hist = model.fit(
-				[chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens, chunk_padded_good_descs,
+				[chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens, chunk_padded_astspaths, chunk_padded_good_descs,
 				 chunk_padded_bad_descs], epochs=1, batch_size=batch_size, validation_split=split)
 
 			if hist.history['val_loss'][0] < val_loss['loss'] :
