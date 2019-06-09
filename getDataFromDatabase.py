@@ -62,10 +62,10 @@ def getVocabForAST(asts, vocab_size):
 			if "type" in node.keys():
 				counts[node["type"]] = counts.get(node["type"], 0) + 1
 				vocab.update([node["type"]])
-		# code2seq中path不包括value
-		# if "value" in node.keys():
-		#     counts[node["value"]] = counts.get(counts[node["value"]], 0) + 1
-		#     vocab.update(node["value"])
+			# code2seq中path不包括value
+			if "value" in node.keys():
+				counts[node["value"]] = counts.get(counts[node["value"]], 0) + 1
+				vocab.update(node["value"])
 
 	_sorted = sorted(vocab, reverse=True, key=lambda x: counts[x])
 	for i, word in enumerate(["<PAD>", "<UNK>", "<START>", "<STOP>"] + _sorted):
@@ -106,65 +106,9 @@ def getNPath(ast, n):
 	return nPath
 
 
-# def getSBT(ast, root):
-# 	# 得到李戈的sbt树 （效果已经在多篇文章里证明不行了）
-# 	cur_root = ast[root["index"]]
-# 	tmp_list = []
-# 	tmp_list.append("(")
-# 	if "value" in cur_root.keys() and len(cur_root["value"]) > 0:
-# 		str = cur_root["type"] + "_" + cur_root["value"] # 没有孩子
-# 	else:
-# 		str = cur_root["type"]
-# 	tmp_list.append(str)
-# 	if "children" in cur_root.keys():
-# 		chs = cur_root["children"]
-# 		for ch in chs:
-# 			tmpl = getSBT(ast, ast[ch])
-# 			tmp_list.extend(tmpl)
-#
-# 	tmp_list.append(")")
-# 	return tmp_list
-
-
 def getIndex(node):
 	return node["index"]
 
-
-# def str2list(ast):
-# 	nodes = []
-# 	while len(ast) > 0:
-# 		idx = ast.find("},")
-# 		if idx == -1:
-# 			idx = ast.find("}")
-# 		node = ast[:idx + 1]
-#
-# 		idx1 = node.find("type")
-# 		if idx1 != -1:
-# 			idx3 = node.find(",", idx1)
-# 			if idx3 == -1:
-# 				idx3 = node.find("}", idx1)
-# 			type = node[idx1 + 6: idx3]
-# 			new_type = '"' + type + '"'
-# 			node = node[0: idx1 + 6] + new_type + node[idx3:]
-# 		# node = node.replace(type, new_type)
-#
-# 		idx2 = node.find("value")
-# 		if idx2 != -1:
-# 			idx4 = node.find(",", idx2)
-# 			if idx4 == -1:
-# 				idx4 = len(node) - 1
-# 			# idx4 = node.find("}", idx2)
-# 			value = node[idx2 + 7: idx4]
-# 			new_value = '"' + value + '"'
-# 			node = node[0: idx2 + 7] + new_value + node[idx4:]
-# 		# node = node.replace(value, new_value)
-# 		nodes.append(json.loads(node))
-# 		# print(node)
-#
-# 		if idx + 2 > len(ast):
-# 			break
-# 		ast = ast[idx + 3:]
-# 	return sorted(nodes, key=getIndex)
 
 def str2list(ast):
 	nodes = []

@@ -20,6 +20,7 @@ from models import *
 import pymysql
 
 import getDataFromDatabase
+import ASTutils
 # os.environ['CUDA_VISIBLE_DEVICES']='0'
 
 class CodeSearcher:
@@ -69,6 +70,8 @@ class CodeSearcher:
 			self.vocab_apiseq2.append(row[3])
 
 			self.vocab_ast2.append(row[4])
+
+		self.ast_vocab_to_int, self.ast_int_to_vocab = ASTutils.getVocabForAST(self.vocab_ast2, self.conf.vocab_ast)
 
 		if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
 			self.data_len = len(data)
@@ -260,8 +263,9 @@ class CodeSearcher:
 			chunk_padded_apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
 			chunk_padded_tokens = self.pad(chunk_tokens, self.conf.tokens_len)
 
-			ast_vocab_to_int = getDataFromDatabase.load_vocab('vocab_ast_star20.json')
-			chunk_astspaths = getDataFromDatabase.getPath(chunk_asts, self.conf.path_num, ast_vocab_to_int)
+			# ast_vocab_to_int = getDataFromDatabase.load_vocab('vocab_ast_star20.json')
+			# chunk_astspaths = getDataFromDatabase.getPath(chunk_asts, self.conf.path_num, ast_vocab_to_int)
+			chunk_astspaths = ASTutils.getPathSimplify(chunk_asts, self.conf.path_num, self.ast_vocab_to_int)
 			chunk_padded_astspaths = self.pad(chunk_astspaths, self.conf.astpath_len)
 
 			chunk_padded_good_descs = self.pad(chunk_descs, self.conf.desc_len)
@@ -284,8 +288,6 @@ class CodeSearcher:
 			if valid_every is not None and i % valid_every == 0:
 				acc1, mrr = self.valid(model, 1000, 1)
 				print(acc1, mrr)
-
-
 
 
 	def valid(self, model, poolsize, K):
