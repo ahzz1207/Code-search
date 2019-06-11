@@ -32,7 +32,7 @@ class conf:
         self.n_words = 10000  # the size of vocab
         self.api_words = 50000  # api词表大小
         self.new_api_words = 10001
-        self.path_num = 100
+        self.path_num = 2
 
         # vocab_methname
         self.vocab_methname = 'vocab.methname.pkl'

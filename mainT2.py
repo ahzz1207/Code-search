@@ -276,7 +276,14 @@ class CodeSearcher:
 			# ast_vocab_to_int = getDataFromDatabase.load_vocab('vocab_ast_star20.json')
 			# chunk_astspaths = getDataFromDatabase.getPath(chunk_asts, self.conf.path_num, ast_vocab_to_int)
 			chunk_astspaths = ASTutils.getPathSimplify(chunk_asts, self.conf.path_num, self.ast_vocab_to_int)
-			chunk_padded_astspaths = self.pad(chunk_astspaths, self.conf.astpath_len)
+
+			chunk_padded_astspaths = []
+			for i in range(self.conf.path_num):
+				chunk_path = []
+				for j in range(len(chunk_astspaths)):  # 一个epoch数据量
+					chunk_path.append(chunk_astspaths[j][i])  # 每个数据的第i条path作为一个单元的输入 需要pad
+				chunk_padded_astspaths.append(self.pad(chunk_path, self.conf.astpath_len))
+			# chunk_padded_astspaths = self.pad(chunk_astspaths, self.conf.astpath_len)
 
 			chunk_padded_good_descs = self.pad(chunk_descs, self.conf.desc_len)
 			chunk_bad_descs = [desc for desc in chunk_descs]
