@@ -64,8 +64,8 @@ def getVocabForAST(asts, vocab_size):
 				vocab.update([node["type"]])
 			# code2seq中path不包括value
 			if "value" in node.keys():
-				counts[node["value"]] = counts.get(counts[node["value"]], 0) + 1
-				vocab.update(node["value"])
+				counts[node["value"]] = counts.get(node["value"], 0) + 1
+				vocab.update([node["value"]])
 
 	_sorted = sorted(vocab, reverse=True, key=lambda x: counts[x])
 	for i, word in enumerate(["<PAD>", "<UNK>", "<START>", "<STOP>"] + _sorted):
@@ -112,7 +112,7 @@ def getIndex(node):
 
 def str2list(ast):
 	nodes = []
-	ast = json.loads(ast)
+	ast = json.loads(eval(ast))
 	for a in ast:
 		nodes.append(a)
 	return sorted(nodes, key=getIndex)
@@ -125,13 +125,13 @@ def getVocab():
 		host="localhost",
 		port=3306,
 		user="root",
-		passwd="17210240114",
+		passwd="Taylorswift-1997",
 		db="githubreposfile",
 		charset='utf8'
 	)
 	cursor = connect.cursor()
 	# sql = "SELECT id, methName, tokens, comments, apiseq, newapiseq FROM reposfile_new"
-	sql = "SELECT ast FROM reposfile_new"
+	sql = "SELECT * FROM reposfile"
 	cursor.execute(sql)
 	data = cursor.fetchall()
 
@@ -145,18 +145,18 @@ def getVocab():
 	# todo: 绑定id
 	ids = []
 	for i in range(len(data)):
-		# ids.append(int(data[i][0]))
-		# methName = str(data[i][1])
-		# methNames.append(methName)
-		#
-		# token = str(data[i][2])
-		# tokens.append(token)
-		#
-		# desc = str(data[i][3])
-		# descs.append(desc)
-		#
-		# apiseq = str(data[i][4])
-		# apiseqs.append(apiseq)
+		ids.append(int(data[i][0]))
+		methName = str(data[i][1])
+		methNames.append(methName)
+
+		token = str(data[i][2])
+		tokens.append(token)
+
+		desc = str(data[i][3])
+		descs.append(desc)
+
+		apiseq = str(data[i][4])
+		apiseqs.append(apiseq)
 		#
 		# if data[i][5]:
 		# 	apiseqnew = str(data[i][5])
@@ -164,9 +164,7 @@ def getVocab():
 		# else:
 		# 	newapiseq.append("%%%%")
 
-		ast = str(data[i][0])
-		# 这一步替换注
-		# ast = ast.replace("children:", "\"children\":").replace("index:", "\"index\":").replace("value:", "\"value\":").replace("type:", "\"type\":")
+		ast = str(data[i][6])
 		ast = str2list(ast)
 		asts.append(ast)
 	length = len(data)
@@ -174,10 +172,10 @@ def getVocab():
 	cf = configs.conf()
 	print(length)
 
-	# methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, cf.n_words)
-	# token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, cf.n_words)
-	# desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, cf.n_words)
-	# apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, cf.api_words)  # api词表大小和其他的不一样
+	methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, cf.n_words)
+	token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, cf.n_words)
+	desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, cf.n_words)
+	apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, cf.api_words)  # api词表大小和其他的不一样
 	# apiseqnew_vocab_to_int, apiseqnew_int_to_vocab = getVocabForOther(newapiseq, cf.new_api_words)
 
 	# 以上这些特征可以转为编号后重新写入数据库
@@ -224,12 +222,15 @@ def getVocab():
 	ast_vocab_to_int, ast_int_to_vocab = getVocabForAST(asts, cf.n_words)
 
 	# ast的词表保存在本地
-	save_vocab("vocab_ast_star20.json", ast_vocab_to_int)
+	save_vocab("vocab_ast.json", ast_vocab_to_int)
+	save_vocab("vocab_method.json", methName_vocab_to_int)
+	save_vocab("vocab_api.json", apiseq_vocab_to_int)
+	save_vocab("vocab_token.json", token_vocab_to_int)
+	save_vocab("vocab_desc.json", desc_vocab_to_int)
+
 
 def list2int(list):
 	return " ".join([str(x) for x in list])
-
-
 
 
 def save_vocab(path, params):

@@ -27,11 +27,11 @@ class CodeSearcher:
 	def __init__(self, conf):
 		self.conf = conf
 		self.path = self.conf.data_dir
-		self.vocab_methname = self.load_pickle(self.path + self.conf.vocab_methname)
-		self.vocab_apiseq = self.load_pickle(self.path + self.conf.vocab_apiseq)
-		self.vocab_tokens = self.load_pickle(self.path + self.conf.vocab_tokens)
-		self.vocab_desc = self.load_pickle(self.path + self.conf.vocab_desc)
-		self.vocab_ast = self.load_pickle(self.path + self.conf.vocab_ast)
+		# self.vocab_methname = self.load_pickle(self.path + self.conf.vocab_methname)
+		# self.vocab_apiseq = self.load_pickle(self.path + self.conf.vocab_apiseq)
+		# self.vocab_tokens = self.load_pickle(self.path + self.conf.vocab_tokens)
+		# self.vocab_desc = self.load_pickle(self.path + self.conf.vocab_desc)
+		# self.vocab_ast = self.load_pickle(self.path + self.conf.vocab_ast)
 
 		self.vocab_methname2 = []
 		self.vocab_apiseq2 = []
@@ -51,14 +51,16 @@ class CodeSearcher:
 
 	def get_dataset(self):
 		conn = pymysql.Connect(
-			host="10.131.252.198",
+			host="localhost",
 			port=3306,
 			user="root",
-			passwd="17210240114",
+			passwd="Taylorswift-1997",
 			db="githubreposfile",
+			charset='utf8'
 		)
 		cursor = conn.cursor()
-		sql = "select methindex, tokensindex, descindex, apiseq from star20index "
+		# sql = "select methindex, tokensindex, descindex, apiseq from star20index "
+		sql = "select methName, tokens, comments, apiseq, ast from reposfile"
 
 		cursor.execute(sql)
 		conn.commit()
@@ -71,7 +73,12 @@ class CodeSearcher:
 
 			self.vocab_ast2.append(row[4])
 
-		self.ast_vocab_to_int, self.ast_int_to_vocab = ASTutils.getVocabForAST(self.vocab_ast2, self.conf.vocab_ast)
+		self.ast_vocab_to_int = getDataFromDatabase.load_vocab("vocab_ast.json")
+		self.methName_vocab_to_int = getDataFromDatabase.load_vocab("vocab_method.json")
+		self.token_vocab_to_int = getDataFromDatabase.load_vocab("vocab_token.json")
+		self.desc_vocab_to_int = getDataFromDatabase.load_vocab("vocab_desc.json")
+		self.apiseq_vocab_to_int = getDataFromDatabase.load_vocab("vocab_api.json")  # api词表大小和其他的不一样
+		self.vocab = {'meth':self.methName_vocab_to_int, 'apiseq':self.apiseq_vocab_to_int, 'tokens':self.token_vocab_to_int, 'desc':self.desc_vocab_to_int, 'ast':self.ast_vocab_to_int}
 
 		if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
 			self.data_len = len(data)
@@ -92,7 +99,10 @@ class CodeSearcher:
 				chunk_size = start_offset + chunk_size - self.data_len
 				offset = 0
 				start_offset = 0
-			sentns.append(np.array([int(x, base=10) for x in self.data_dic[name][offset].strip().split(' ')]))
+			if name == 'ast':
+				sentns.append(self.data_dic[name][offset].decode())
+			else:
+				sentns.append(np.array([self.vocab[name].get(x, self.vocab[name]["<UNK>"]) for x in self.data_dic[name][offset].decode().strip().split(' ')]))
 			offset += 1
 		return sentns
 

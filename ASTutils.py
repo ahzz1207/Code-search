@@ -1,4 +1,6 @@
 import random
+import json
+
 
 def parseInput(sent):
     return [z for z in sent.split(' ')]
@@ -12,7 +14,7 @@ def toNum(data, vocab_to_int):
     return res
 
 
-def getVocabForAST(self, asts, vocab_size):
+def getVocabForAST(asts, vocab_size):
     vocab = set()
     counts = {}
 
@@ -43,16 +45,18 @@ def getVocabForAST(self, asts, vocab_size):
 def dfsSimplify(ast, root, path, totalpath):
     # 深度遍历 得到多条路径
     if "children" in ast[root["index"]].keys():
-        if len(ast[root["index"]]["children"]) > 1:
+        if len(ast[root["index"]]["children"]) >= 1:
             path.append(root["type"])
             for child in root["children"]:
                 dfsSimplify(ast, ast[child], path, totalpath)
-                path.pop()
+            path.pop()
         else:
             # 只有一个子节点 略过
             dfsSimplify(ast, ast[root["children"][0]], path, totalpath)
-
     else:
+        # todo
+        if root["value"] == None:
+            root["value"] = "None"
         path.append(root["value"])
         # 叶节点内容包含在path中
         totalpath.append(' '.join(path))
@@ -77,6 +81,7 @@ def getPathSimplify(asts, pathNum, ast_vocab_to_int):
     # 每次训练路径都是随机抽取的
     astPathNum = [] # 所有ast的所有path的编号表示 三维数组
     for ast in asts:
+        ast = json.loads(ast)
         nPath = getNPathSimplify(ast, pathNum)  # 针对每个ast的n条路径
         nPathNum = []
         for path in nPath:  #每条path的编号表示
