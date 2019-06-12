@@ -77,7 +77,7 @@ class JointEmbeddingModel:
 			self.transformer_astpath.append(
 				transformer.EncoderModel(vocab_size=self.vocab_size, model_dim=self.hidden_dims,
 										 embed_dim=self.embed_dims, ffn_dim=self.lstm_dims,
-										 dropout_rate=0.2, n_heads=8, max_len=self.astpath_len,
+										 droput_rate=0.2, n_heads=8, max_len=self.astpath_len,
 										 name='astpath' + str(i))
 			)
 
@@ -93,9 +93,11 @@ class JointEmbeddingModel:
 
 		# astpath
 		# embedding layer
-		astpath_out = []
-		for i in range(self.astpath_num):
-			astpath_out.append(self.transformer_astpath[i](astpath[i]))
+		astpath_out = self.transformer_astpath[0](astpath[0])
+		for i in range(1, self.astpath_num):
+			astpath_out = Concatenate([astpath_out, self.transformer_astpath[i](astpath[i])])
+			# astpath_out.append(self.transformer_astpath[i](astpath[i]))
+		# todo:average pooling
 		# fully connection
 		astpath_fully_repr = Dense(self.hidden_dims, 'tanh', name='fully_connect_astpath')(astpath_out)
 

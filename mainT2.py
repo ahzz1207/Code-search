@@ -16,7 +16,7 @@ import math
 import traceback
 import threading
 from utils import normalize, cos_np_for_normalized, cos_np
-from models import *
+from modelsT2 import *
 import pymysql
 
 import getDataFromDatabase
@@ -85,7 +85,6 @@ class CodeSearcher:
 			print("All index init succes, it's length ：%d"%len(data))
 		cursor.close()
 		conn.close()
-
 
 	def get_training_data(self, name, start_offset, chunk_size):
 		if chunk_size == -1:
