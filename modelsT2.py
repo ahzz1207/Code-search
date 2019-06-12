@@ -1,6 +1,6 @@
 import h5py
 import numpy as np
-from tensorflow.python.keras.layers import Concatenate, Dot, Lambda, Activation, Embedding, Dense, Dropout
+from tensorflow.python.keras.layers import Concatenate, Dot, Lambda, Activation, Embedding, Dense, Dropout, add
 from tensorflow.python.keras.layers import CuDNNLSTM as LSTM
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.engine import Input
@@ -78,7 +78,7 @@ class JointEmbeddingModel:
 				transformer.EncoderModel(vocab_size=self.vocab_size, model_dim=self.hidden_dims,
 										 embed_dim=self.embed_dims, ffn_dim=self.lstm_dims,
 										 droput_rate=0.2, n_heads=8, max_len=self.astpath_len,
-										 name='astpath' + str(i))
+										 name='astpathT' + str(i))
 			)
 
 		# create path to store model Info
@@ -97,12 +97,14 @@ class JointEmbeddingModel:
 		astpath_out = self.transformer_astpath[0](astpath[0])
 		# astpath_out = []
 		for i in range(self.astpath_num):
-			astpath_out = Concatenate(name='astpath_concat' + str(i))([astpath_out, self.transformer_astpath[i](astpath[i])])
+			astpath_out = add([astpath_out, self.transformer_astpath[i](astpath[i])])
 			# astpath_out.append(self.transformer_astpath[i](astpath[i]))
 		# todo:average pooling
-
+		averagepool = Lambda(lambda x: k.mean(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
+						 name='averagepooling_astpath')
+		astpath_pool = averagepool(astpath_out)
 		# fully connection
-		astpath_fully_repr = Dense(self.hidden_dims, 'tanh', name='fully_connect_astpath')(astpath_out)
+		astpath_fully_repr = Dense(self.hidden_dims, 'tanh', name='fully_connect_astpath')(astpath_pool)
 
 		# method name
 		# embedding layer
@@ -143,27 +145,13 @@ class JointEmbeddingModel:
 		dropout = Dropout(0.25, name='dropout_tokens_embed')
 		tokens_dropout = dropout(tokens_embedding)
 
-		# forward rnn
-		fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_tokens_fw')
-
-		# backward rnn
-		bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_tokens_bw')
-
-		tokens_fw = fw_rnn(tokens_dropout)
-		tokens_bw = bw_rnn(tokens_dropout)
-
-		dropout = Dropout(0.25, name='dropout_tokens_rnn')
-		tokens_fw_dropout = dropout(tokens_fw)
-		tokens_bw_dropout = dropout(tokens_bw)
-
 		# max pooling
 		maxpool = Lambda(lambda x: k.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
 		                 name='maxpooling_tokens')
-		# tokens_pool = Concatenate(name='concat_tokens_lstm')([maxpool(tokens_fw_dropout), maxpool(tokens_bw_dropout)])
 		tokens_pool = maxpool(tokens_dropout)
 		activation = Activation('tanh', name='active_tokens')
 		tokens_repr = activation(tokens_pool)
-		# tokens_repr = tf.reshape(tokens_repr, [128, 256])
+		tokens_repr = tf.reshape(tokens_repr, [128, self.hidden_dims])
 
 		# fusion method_name, apiseq, tokens, ast
 		merge_method_name_api = Concatenate(name='merge_methname_api')([method_name_repr, apiseq_repr])

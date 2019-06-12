@@ -284,13 +284,14 @@ class CodeSearcher:
 				chunk_padded_astspaths.append(self.pad(chunk_path, self.conf.astpath_len))
 			# chunk_padded_astspaths = self.pad(chunk_astspaths, self.conf.astpath_len)
 
+
 			chunk_padded_good_descs = self.pad(chunk_descs, self.conf.desc_len)
 			chunk_bad_descs = [desc for desc in chunk_descs]
 			random.shuffle(chunk_bad_descs)
 			chunk_padded_bad_descs = self.pad(chunk_bad_descs, self.conf.desc_len)
 
 			hist = model.fit(
-				[chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens, chunk_padded_astspaths, chunk_padded_good_descs,
+				[chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens, chunk_padded_astspaths[0], chunk_padded_astspaths[1], chunk_padded_good_descs,
 				 chunk_padded_bad_descs], epochs=1, batch_size=batch_size, validation_split=split)
 
 			if hist.history['val_loss'][0] < val_loss['loss'] :
