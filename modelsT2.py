@@ -97,7 +97,7 @@ class JointEmbeddingModel:
 		for i in range(self.astpath_num):
 			astpath_out.append(self.transformer_astpath[i](astpath[i]))
 		# fully connection
-		astpath_fully_repr = Dense(self.hidden_dims, 'tanh', name='fully_connect_astpath')
+		astpath_fully_repr = Dense(self.hidden_dims, 'tanh', name='fully_connect_astpath')(astpath_out)
 
 		# method name
 		# embedding layer
@@ -206,8 +206,8 @@ class JointEmbeddingModel:
 		self.sim_model.summary()
 
 		#  4 -- build training model
-		good_sim = sim_model([self.meth_name, self.apiseq, self.tokens, self.desc_good])
-		bad_sim = sim_model([self.meth_name, self.apiseq, self.tokens, self.desc_bad])
+		good_sim = sim_model([self.meth_name, self.apiseq, self.tokens, self.astpath, self.desc_good])
+		bad_sim = sim_model([self.meth_name, self.apiseq, self.tokens, self.astpath, self.desc_bad])
 		loss = Lambda(lambda x: k.maximum(1e-6, self.margin - (x[0] - x[1])), output_shape=lambda x: x[0], name='loss')(
 			[good_sim, bad_sim])
 
