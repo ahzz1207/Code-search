@@ -93,17 +93,19 @@ class JointEmbeddingModel:
 
 		# astpath
 		# embedding layer
+		# [batch_size, ast_len, embed_size]
 		astpath_out = self.transformer_astpath[0](astpath[0])
-		for i in range(1, self.astpath_num):
-			astpath_out = Concatenate([astpath_out, self.transformer_astpath[i](astpath[i])])
+		# astpath_out = []
+		for i in range(self.astpath_num):
+			astpath_out = Concatenate(name='astpath_concat' + str(i))([astpath_out, self.transformer_astpath[i](astpath[i])])
 			# astpath_out.append(self.transformer_astpath[i](astpath[i]))
 		# todo:average pooling
+
 		# fully connection
 		astpath_fully_repr = Dense(self.hidden_dims, 'tanh', name='fully_connect_astpath')(astpath_out)
 
 		# method name
 		# embedding layer
-
 		meth_name_out = self.transformer_meth(meth_name)
 		# max pooling
 		maxpool = Lambda(lambda x: k.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
@@ -157,12 +159,13 @@ class JointEmbeddingModel:
 		# max pooling
 		maxpool = Lambda(lambda x: k.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
 		                 name='maxpooling_tokens')
-		tokens_pool = Concatenate(name='concat_tokens_lstm')([maxpool(tokens_fw_dropout), maxpool(tokens_bw_dropout)])
+		# tokens_pool = Concatenate(name='concat_tokens_lstm')([maxpool(tokens_fw_dropout), maxpool(tokens_bw_dropout)])
 		tokens_pool = maxpool(tokens_dropout)
 		activation = Activation('tanh', name='active_tokens')
 		tokens_repr = activation(tokens_pool)
-		tokens_repr = tf.reshape(tokens_repr, [128, 256])
-		# fusion method_name, apiseq, tokens
+		# tokens_repr = tf.reshape(tokens_repr, [128, 256])
+
+		# fusion method_name, apiseq, tokens, ast
 		merge_method_name_api = Concatenate(name='merge_methname_api')([method_name_repr, apiseq_repr])
 		merge_api_token = Concatenate(name='merge_api_token')([merge_method_name_api, tokens_repr])
 
