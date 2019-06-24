@@ -63,9 +63,9 @@ def getVocabForAST(asts, vocab_size):
 				counts[node["type"]] = counts.get(node["type"], 0) + 1
 				vocab.update([node["type"]])
 			# code2seq中path不包括value
-			if "value" in node.keys():
-				counts[node["value"]] = counts.get(node["value"], 0) + 1
-				vocab.update([node["value"]])
+			# if "value" in node.keys():
+			# 	counts[node["value"]] = counts.get(node["value"], 0) + 1
+			# 	vocab.update([node["value"]])
 
 	_sorted = sorted(vocab, reverse=True, key=lambda x: counts[x])
 	for i, word in enumerate(["<PAD>", "<UNK>", "<START>", "<STOP>"] + _sorted):
@@ -86,9 +86,12 @@ def dfs(ast, root, path, totalpath):
 			dfs(ast, ast[child], path, totalpath)
 		path.pop()
 	else:
-		# path.append(root["value"])
+		if root["value"] == None:
+			root["value"] = "None"
+		path.append(root["value"])
 		# code2seq中叶节点内容不包含在path中 而是subtoken
 		totalpath.append(' '.join(path))
+		path.pop()
 		return
 
 
@@ -220,6 +223,7 @@ def getVocab():
 	# print("insert failed number is: %d" % failed)
 
 	ast_vocab_to_int, ast_int_to_vocab = getVocabForAST(asts, cf.n_words)
+	getPath(asts, 10, ast_vocab_to_int, token_vocab_to_int)
 
 	# ast的词表保存在本地
 	save_vocab("vocab_ast.json", ast_vocab_to_int)
@@ -243,15 +247,24 @@ def load_vocab(path):
 		return json.load(f)
 
 
-def getPath(asts, pathNum, ast_vocab_to_int):
+def getPath(asts, pathNum, ast_vocab_to_int, token_vocab_to_int):
 	# 每次训练路径都是随机抽取的
 	astPathNum = []  # 所有ast的所有path的编号表示 三维数组
+	firstTokenNum = []
+	lastTokenNum = []
 	for ast in asts:
 		nPath = getNPath(ast, pathNum)  # 针对每个ast的n条路径
 		nPathNum = []
+		firstToken = []
+		lastToken = []
 		for path in nPath:  # 每条path的编号表示
-			nPathNum.append(toNum(path, ast_vocab_to_int))
+			path = path.split(' ')
+			nPathNum.append(toNum(' '.join(path[1:-1]), ast_vocab_to_int))
+			firstToken.append(toNum(path[0], token_vocab_to_int))
+			lastToken.append(toNum(path[-1], token_vocab_to_int))
 		astPathNum.append(nPathNum)
+		firstTokenNum.append(firstToken)
+		lastTokenNum.append(lastToken)
 	# sbt = ' '.join(getSBT(ast, ast[0]))  # 得到李戈的sbt树
 	return astPathNum
 

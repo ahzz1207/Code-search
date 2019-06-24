@@ -274,7 +274,7 @@ class CodeSearcher:
 
 			# ast_vocab_to_int = getDataFromDatabase.load_vocab('vocab_ast_star20.json')
 			# chunk_astspaths = getDataFromDatabase.getPath(chunk_asts, self.conf.path_num, ast_vocab_to_int)
-			chunk_astspaths = ASTutils.getPathSimplify(chunk_asts, self.conf.path_num, self.ast_vocab_to_int)
+			chunk_astspaths, chunk_firsttoken, chunk_lasttoken = ASTutils.getPathSimplify(chunk_asts, self.conf.path_num, self.ast_vocab_to_int, self.token_vocab_to_int)
 
 			chunk_padded_astspaths = []
 			for i in range(self.conf.path_num):

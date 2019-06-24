@@ -45,14 +45,10 @@ def getVocabForAST(asts, vocab_size):
 def dfsSimplify(ast, root, path, totalpath):
     # 深度遍历 得到多条路径
     if "children" in ast[root["index"]].keys():
-        if len(ast[root["index"]]["children"]) >= 1:
-            path.append(root["type"])
-            for child in root["children"]:
-                dfsSimplify(ast, ast[child], path, totalpath)
-            path.pop()
-        else:
-            # 只有一个子节点 略过
-            dfsSimplify(ast, ast[root["children"][0]], path, totalpath)
+        path.append(root["type"])
+        for child in root["children"]:
+            dfsSimplify(ast, ast[child], path, totalpath)
+        path.pop()
     else:
         # todo
         if root["value"] == None:
@@ -60,6 +56,7 @@ def dfsSimplify(ast, root, path, totalpath):
         path.append(root["value"])
         # 叶节点内容包含在path中
         totalpath.append(' '.join(path))
+        path.pop()
         return
 
 
@@ -77,15 +74,24 @@ def getNPathSimplify(ast, n):
     return nPath
 
 
-def getPathSimplify(asts, pathNum, ast_vocab_to_int):
+def getPathSimplify(asts, pathNum, ast_vocab_to_int, token_vocab_to_int):
     # 每次训练路径都是随机抽取的
     astPathNum = [] # 所有ast的所有path的编号表示 三维数组
+    firstTokenNum = []
+    lastTokenNum = []
     for ast in asts:
         ast = json.loads(ast)
         nPath = getNPathSimplify(ast, pathNum)  # 针对每个ast的n条路径
         nPathNum = []
+        firstToken = []
+        lastToken = []
         for path in nPath:  #每条path的编号表示
-            nPathNum.append(toNum(path, ast_vocab_to_int))
+            path = path.split(' ')
+            nPathNum.append(toNum(' '.join(path[1:-1]), ast_vocab_to_int))
+            firstToken.append(toNum(path[0], token_vocab_to_int))
+            lastToken.append(toNum(path[-1], token_vocab_to_int))
         astPathNum.append(nPathNum)
+        firstTokenNum.append(firstToken)
+        lastTokenNum.append(lastToken)
         # sbt = ' '.join(getSBT(ast, ast[0]))  # 得到李戈的sbt树
-    return astPathNum
+    return astPathNum, firstTokenNum, lastTokenNum
