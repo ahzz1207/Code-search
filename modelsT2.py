@@ -22,6 +22,9 @@ class JointEmbeddingModel:
 		self.tokens_len = config.tokens_len
 		self.desc_len = config.desc_len
 
+		# self.astpath_len = config.astpath_len
+		# self.astpath_num = config.path_num
+
 		self.vocab_size = config.n_words  # the size of vocab
 		self.embed_dims = config.embed_dims
 		self.lstm_dims = config.lstm_dims
@@ -38,6 +41,10 @@ class JointEmbeddingModel:
 		self.tokens = Input(shape=(self.tokens_len,), dtype='int32', name='tokens2')
 		self.desc_good = Input(shape=(self.desc_len,), dtype='int32', name='desc_good')
 		self.desc_bad = Input(shape=(self.desc_len,), dtype='int32', name='desc_bad')
+
+		# self.astpath = []
+		# for i in range(self.astpath_num):
+		# 	self.astpath.append(Input(shape=(self.astpath_len,), dtype='int32', name='astpath' + str(i)))
 
 		if not os.path.exists(self.data_dir + 'model/' + self.model_name):
 			os.makedirs(self.data_dir + 'model/' + self.model_name)
@@ -127,10 +134,11 @@ class JointEmbeddingModel:
 		maxpool = Lambda(lambda x: k.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
 		                 name='maxpooling_tokens')
 		tokens_pool = Concatenate(name='concat_tokens_lstm')([maxpool(tokens_fw_dropout), maxpool(tokens_bw_dropout)])
-		tokens_pool = maxpool(tokens_dropout)
+		tokens_pool = maxpool(tokens_pool)
 		activation = Activation('tanh', name='active_tokens')
 		tokens_repr = activation(tokens_pool)
-		tokens_repr = tf.reshape(tokens_repr, [128, 256])
+		# tokens_repr = tf.reshape(tokens_repr, [128, 256])
+
 		# fusion method_name, apiseq, tokens
 		merge_method_name_api = Concatenate(name='merge_methname_api')([method_name_repr, apiseq_repr])
 		merge_code_repr = Concatenate(name='merge_code_repr')([merge_method_name_api, tokens_repr])

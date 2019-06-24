@@ -15,12 +15,13 @@ def toNum(data, vocab_to_int):
 	# 转为编号表示
 	res = []
 	for z in parseInput(data):
-		index = vocab_to_int.get(z, -1)
-		if index == -1:
-			# 假定UNK是1
-			res.append(1)
-		else:
-			res.append(index)
+		res.append(vocab_to_int.get(z, 1))
+		# index = vocab_to_int.get(z, -1)
+		# if index == -1:
+		# 	# 假定UNK是1
+		# 	res.append(1)
+		# else:
+		# 	res.append(index)
 	return res
 
 
@@ -58,14 +59,16 @@ def getVocabForAST(asts, vocab_size):
 	int_to_vocab = {}
 
 	for ast in asts:
+		ast = str2list(ast)
 		for node in ast:
 			if "type" in node.keys():
 				counts[node["type"]] = counts.get(node["type"], 0) + 1
 				vocab.update([node["type"]])
 		# code2seq中path不包括value
-		# if "value" in node.keys():
-		#     counts[node["value"]] = counts.get(counts[node["value"]], 0) + 1
-		#     vocab.update(node["value"])
+			if "value" in node.keys():
+			    counts[node["value"]] = counts.get(node["value"], 0) + 1
+			    vocab.update([node["value"]])
+		del ast
 
 	_sorted = sorted(vocab, reverse=True, key=lambda x: counts[x])
 	for i, word in enumerate(["<PAD>", "<UNK>", "<START>", "<STOP>"] + _sorted):
@@ -73,9 +76,8 @@ def getVocabForAST(asts, vocab_size):
 			break
 
 		vocab_to_int[word] = i
-		int_to_vocab[i] = word
 
-	return vocab_to_int, int_to_vocab
+	return vocab_to_int
 
 
 def dfs(ast, root, path, totalpath):
@@ -185,6 +187,7 @@ def getVocab():
 		db="githubreposfile",
 		charset='utf8'
 	)
+
 	cursor = connect.cursor()
 	# sql = "SELECT id, methName, tokens, comments, apiseq, newapiseq FROM reposfile_new"
 	sql = "SELECT ast FROM reposfile_new"
@@ -205,8 +208,11 @@ def getVocab():
 		# methName = str(data[i][1])
 		# methNames.append(methName)
 		#
-		# token = str(data[i][2])
-		# tokens.append(token)
+		# if data[i][2]:
+		# 	token = str(data[i][2])
+		# 	tokens.append(token)
+		# else:
+		# 	tokens.append("$$$$")
 		#
 		# desc = str(data[i][3])
 		# descs.append(desc)
@@ -222,11 +228,10 @@ def getVocab():
 
 		ast = str(data[i][0])
 		# 这一步替换注
-		# ast = ast.replace("children:", "\"children\":").replace("index:", "\"index\":").replace("value:", "\"value\":").replace("type:", "\"type\":")
-		ast = str2list(ast)
+		# ast = str2list(ast)
 		asts.append(ast)
 	length = len(data)
-	data = []
+	del data
 	cf = configs.conf()
 	print(length)
 
@@ -235,7 +240,11 @@ def getVocab():
 	# desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, cf.n_words)
 	# apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, cf.api_words)  # api词表大小和其他的不一样
 	# apiseqnew_vocab_to_int, apiseqnew_int_to_vocab = getVocabForOther(newapiseq, cf.new_api_words)
-
+	# import pickle
+	# methName_vocab_to_int = pickle.load(open(cf.data_dir + cf.vocab_methname, 'rb'))
+	# token_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_tokens, 'rb')))
+	# desc_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_desc, 'rb')))
+	# apiseqnew_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_apiseq, 'rb')))
 	# 以上这些特征可以转为编号后重新写入数据库
 	# methNamesNum = []
 	# for methName in methNames:
@@ -243,31 +252,34 @@ def getVocab():
 	#
 	# tokensNum = []
 	# for token in tokens:
-	# 	tokensNum.append(toNum(token, token_vocab_to_int))
+	# 	if token == "$$$$":
+	# 		tokensNum.append([-100])
+	# 	else:
+	# 		tokensNum.append(toNum(token, token_vocab_to_int))
 	#
 	# descsNum = []
 	# for desc in descs:
 	# 	descsNum.append(toNum(desc, desc_vocab_to_int))
-	#
+
 	# apiseqsNum = []
 	# for apiseq in apiseqs:
 	# 	apiseqsNum.append(toNum(apiseq, apiseq_vocab_to_int))
-	#
+
 	# apiseqnewNum = []
 	# for apiseqn in newapiseq:
 	# 	if apiseqn == "%%%%":
-	# 		apiseqnewNum.append([-10])
+	# 		apiseqnewNum.append([-100])
 	# 	else:
 	# 		apiseqnewNum.append(toNum(apiseqn, apiseqnew_vocab_to_int))
-	#
-	#
-	# assert len(methNamesNum) == len(tokensNum) == len(descsNum) == len(apiseqsNum)
-	# sql = "INSERT INTO repos2index values (%s,%s,%s,%s,%s,%s)"
+
+
+	# assert len(methNamesNum) == len(tokensNum) == len(descsNum) == len(apiseqnewNum)
+	# sql = "insert INTO repos2index2_self values (%s,%s,%s,%s,%s,%s)"
 	# failed = 0
 	# for i in range(length):
-	# 	m, t, d, a, q = list2int(methNamesNum[i]), list2int(tokensNum[i]), list2int(descsNum[i]), list2int(apiseqsNum[i]), list2int(apiseqnewNum[i])
+	# 	m, t, d, a = list2int(methNamesNum[i]), list2int(tokensNum[i]), list2int(descsNum[i]),  list2int(apiseqnewNum[i])
 	# 	try:
-	# 		cursor.execute(sql, (ids[i], m, t, d, a, q))
+	# 		cursor.execute(sql, (ids[i], m, t, d, a, ""))
 	# 	except Exception as e:
 	# 		print(e)
 	# 		print("insert failed")
@@ -277,10 +289,10 @@ def getVocab():
 	# connect.close()
 	# print("insert failed number is: %d" % failed)
 
-	ast_vocab_to_int, ast_int_to_vocab = getVocabForAST(asts, cf.n_words)
+	ast_vocab_to_int = getVocabForAST(asts, cf.n_words-1)
 
 	# ast的词表保存在本地
-	save_vocab("vocab_ast_star20.json", ast_vocab_to_int)
+	save_vocab("vocab_ast.json", ast_vocab_to_int)
 
 def list2int(list):
 	return " ".join([str(x) for x in list])

@@ -1,8 +1,7 @@
-import os
 import tensorflow as tf
 from tensorflow.python.keras.backend import set_session
 config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth=True
+config.gpu_options.allow_growth = True
 session = tf.compat.v1.Session(config=config)
 set_session(session)
 import pickle
@@ -18,21 +17,19 @@ import threading
 from utils import normalize, cos_np_for_normalized, cos_np
 from models import *
 import pymysql
-# os.environ['CUDA_VISIBLE_DEVICES']='0'
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 class CodeSearcher:
 	def __init__(self, conf):
 		self.conf = conf
 		self.path = self.conf.data_dir
-		self.vocab_methname = self.load_pickle(self.path + self.conf.vocab_methname)
-		self.vocab_apiseq = self.load_pickle(self.path + self.conf.vocab_apiseq)
-		self.vocab_tokens = self.load_pickle(self.path + self.conf.vocab_tokens)
 		self.vocab_desc = self.load_pickle(self.path + self.conf.vocab_desc)
 		self.vocab_methname2 = []
 		self.vocab_apiseq2 = []
 		self.vocab_tokens2 = []
 		self.vocab_desc2 = []
-		self.data_dic = {'meth':self.vocab_methname2, 'apiseq':self.vocab_apiseq2, 'tokens':self.vocab_tokens2, 'desc':self.vocab_desc2}
+		self.data_dic = {'meth': self.vocab_methname2, 'apiseq': self.vocab_apiseq2, 'tokens': self.vocab_tokens2, 'desc': self.vocab_desc2}
 		self.data_len = 0
 		self.code_base = None
 		self.code_base_chunksize = 1000000
@@ -49,24 +46,56 @@ class CodeSearcher:
 			user="root",
 			passwd="17210240114",
 			db="githubreposfile",
+			charset='utf8'
 		)
-		cursor = conn.cursor()
-		sql = "select methindex, tokensindex, descindex, apiseq from star20index "
 
+		cursor = conn.cursor()
+		sql = "select methindex, tokensindex, descindex, apiseqnew from repos2index2_self order by rand()"
 		cursor.execute(sql)
 		conn.commit()
-		data = cursor.fetchall()
-		for row in data:
+		data_ = cursor.fetchall()
+
+		self.data_len = len(data_)
+		for row in data_:
 			self.vocab_methname2.append(row[0])
 			self.vocab_tokens2.append(row[1])
 			self.vocab_desc2.append(row[2])
 			self.vocab_apiseq2.append(row[3])
+
 		if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
-			self.data_len = len(data)
-			print("All index init succes, it's length ：%d"%len(data))
+			print("All index init succes, it's length ：%d" % len(data_))
 		cursor.close()
 		conn.close()
+		del data_
 
+	def get_valid_dataset(self):
+		conn = pymysql.Connect(
+			host="10.131.252.198",
+			port=3306,
+			user="root",
+			passwd="17210240114",
+			db="githubreposfile",
+			charset='utf8'
+		)
+
+		cursor = conn.cursor()
+		sql = "select methindex, tokensindex, descindex, apiseq from repos2index_valid order by rand()"
+		cursor.execute(sql)
+		conn.commit()
+		data_ = cursor.fetchall()
+
+		self.data_len = len(data_)
+		for row in data_:
+			self.vocab_methname2.append(row[0])
+			self.vocab_tokens2.append(row[1])
+			self.vocab_desc2.append(row[2])
+			self.vocab_apiseq2.append(row[3])
+
+		if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
+			print("All index init succes, it's length ：%d" % len(data_))
+		cursor.close()
+		conn.close()
+		del data_
 
 	def get_training_data(self, name, start_offset, chunk_size):
 		if chunk_size == -1:
@@ -124,7 +153,7 @@ class CodeSearcher:
 		return sents
 
 	def load_train_data(self, offset, chunk_size):
-		chunk_methnames = self.get_training_data('meth',offset, chunk_size)
+		chunk_methnames = self.get_training_data('meth', offset, chunk_size)
 		chunk_apiseq = self.get_training_data('apiseq', offset, chunk_size)
 		chunk_tokens = self.get_training_data('tokens', offset, chunk_size)
 		chunk_descs = self.get_training_data('desc', offset, chunk_size)
@@ -365,15 +394,17 @@ class CodeSearcher:
 			return idcg
 
 		# load valid dataset
+		self.get_valid_dataset()
 		if self._eval_sets is None:
-			methnames, apiseqs, tokens, descs = self.load_valid_data(poolsize)
 			self._eval_sets = dict()
-			self._eval_sets['methnames'] = methnames
-			self._eval_sets['apiseqs'] = apiseqs
-			self._eval_sets['tokens'] = tokens
-			self._eval_sets['descs'] = descs
+			self._eval_sets['methnames'] = self.get_training_data(name='meth', start_offset=0, chunk_size=poolsize)
+			self._eval_sets['apiseqs'] = self.get_training_data(name='apiseq', start_offset=0, chunk_size=poolsize)
+			self._eval_sets['tokens'] = self.get_training_data(name='tokens', start_offset=0, chunk_size=poolsize)
+			self._eval_sets['descs'] = self.get_training_data(name='desc', start_offset=0, chunk_size=poolsize)
+
 		acc, mrr, map, ndcg = 0, 0, 0, 0
 		data_len = len(self._eval_sets['descs'])
+		batch_size = self.conf.valid_batch_size
 		print("Eval dataSet length %d" % data_len)
 		for i in range(data_len):
 			desc = self._eval_sets['descs'][i]  # good desc
@@ -382,7 +413,13 @@ class CodeSearcher:
 			apiseqs = self.pad(self._eval_sets['apiseqs'], self.conf.apiseq_len)
 			tokens = self.pad(self._eval_sets['tokens'], self.conf.tokens_len)
 			n_results = K
-			sims = model.predict([methnames, apiseqs, tokens, descs], batch_size=data_len).flatten()
+			sims = []
+			for j in range(data_len // batch_size):
+				sim = (model.predict([methnames[j*batch_size: (j+1)*batch_size], apiseqs[j*batch_size: (j+1)*batch_size],
+				                           tokens[j*batch_size: (j+1)*batch_size], descs[j*batch_size: (j+1)*batch_size]],
+				                          batch_size=batch_size).flatten())
+				for x in sim:
+					sims.append(x)
 			negsims = np.negative(sims)
 			predict = np.argsort(negsims)  # predict = np.argpartition(negsims, kth=n_results-1)
 			predict = predict[:n_results]
@@ -467,7 +504,7 @@ class CodeSearcher:
 if __name__ == '__main__':
 	conf = configs.conf()
 	codesearcher = CodeSearcher(conf)
-	mode = 'train'
+	mode = 'eval'
 	#  Define model
 	model = eval(conf.model_name)(conf)
 	model.build()

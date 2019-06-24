@@ -10,25 +10,32 @@ connect = pymysql.Connect(
 	charset='utf8'
 )
 cursor = connect.cursor()
-sql = "insert into star20 values (%s, %s)"
+# select
+sql = "select * from reposname_new"
+cursor.execute(sql)
+rs = cursor.fetchall()
+handled = [row[0] for row in rs]
+print(len(handled))
+
+sql = "insert into star5 values (%s, %s)"
 addrList = []
 
-with open("response.json") as f:
+with open("response5.json") as f:
 	j = json.load(f)
 	for repo in j.get('data'):
 		local_addr = repo.get('local_addr')
-		addrList.append(local_addr)
 		repos_name = local_addr.split('/')[-2] + '$$%' + local_addr.split('/')[-1]
-		try:
-			cursor.execute(sql, (repo.get('id'), repos_name))
-			connect.commit()
-		except Exception as e:
-			connect.rollback()
-			print(e)
-
+		if repos_name not in handled:
+			addrList.append(local_addr)
+			try:
+				cursor.execute(sql, (repo.get('id'), repos_name))
+			except Exception as e:
+				connect.rollback()
+				print(e)
+connect.commit()
 cursor.close()
 connect.close()
 
-with open('addrList.txt', 'w') as f:
+with open('addrList5.txt', 'w') as f:
 	for addr in addrList:
 		f.write(addr + '\n')
