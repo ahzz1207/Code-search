@@ -16,46 +16,34 @@ def toNum(data, vocab_to_int):
 	return res
 
 
-def astToNum(data, vocab_to_int):
+def tokenToNum(data, vocab_to_int):
 	# 转为编号表示
 	res = []
 	for z in parseInput(data):
-		res.append(vocab_to_int.get(z, vocab_to_int["<UNK>"]))
-	if len(res) < 9:
-		for i in range(9 - len(res)):
+		res.append(str(vocab_to_int.get(z, vocab_to_int["<UNK>"])))
+	if len(res) > 5:
+		res = res[:5]
+	if len(res) < 5:
+		for i in range(5-len(res)):
 			res.append(vocab_to_int["<PAD>"])
-	if len(res) > 9:
-		res = res[:9]
-
 	return res
 
 
-def getVocabForAST(asts, vocab_size):
-	vocab = set()
-	counts = {}
+def astToNum(data, vocab_to_int):
+	# 转为编号表示
+	res = []
 
-	vocab_to_int = {}
-	int_to_vocab = {}
+	if len(data) < 9:
+		for i in range(9 - len(res)):
+			data.append("<PAD>")
+	elif len(data) > 9:
+		data = data[:9]
 
-	for ast in asts:
-		for node in ast:
-			if "type" in node.keys():
-				counts[node["type"]] = counts.get(node["type"], 0) + 1
-				vocab.update([node["type"]])
-			# naive方法中path包括value
-			if "value" in node.keys():
-				counts[node["value"]] = counts.get(counts[node["value"]], 0) + 1
-				vocab.update(node["value"])
+	for z in (data):
+		res.append(vocab_to_int.get(z, vocab_to_int["<UNK>"]))
 
-	_sorted = sorted(vocab, reverse=True, key=lambda x: counts[x])
-	for i, word in enumerate(["<PAD>", "<UNK>", "<START>", "<STOP>"] + _sorted):
-		if vocab_size is not None and i > vocab_size:
-			break
+	return res
 
-		vocab_to_int[word] = i
-		int_to_vocab[i] = word
-
-	return vocab_to_int, int_to_vocab
 
 
 def dfsSimplify(ast, root, path, totalpath):
@@ -96,14 +84,21 @@ def getNPathSimplify(ast, n):
 def getPathSimplify(asts, pathNum, ast_vocab_to_int):
 	# 每次训练路径都是随机抽取的
 	astPathNum = []  # 所有ast的所有path的编号表示 三维数组
+	firstToNum = []
+	lastTokNum = []
 	for ast in asts:
 		ast = json.loads(ast)
 		nPath = getNPathSimplify(ast, pathNum)  # 针对每个ast的n条路径
 		nPathNum = []
+		firstNum = []
+		lastNum = []
 		for path in nPath:  # 每条path的编号表示
+			firstNum.append(tokenToNum(path[0]), tokens_vocab_to_int)
+			lastNum.append(tokenToNum(path[-1]), tokens_vocab_to_int)
 			nPathNum.append(astToNum(path, ast_vocab_to_int))
 		astPathNum.append(nPathNum)
-		# sbt = ' '.join(getSBT(ast, ast[0]))  # 得到李戈的sbt树
+		firstToNum.append(firstNum)
+		lastTokNum.append(lastNum)
 	return astPathNum
 
 
@@ -112,24 +107,100 @@ conn = pymysql.Connect(
 	port=3306,
 	user="root",
 	passwd="17210240114",
-	db="githubreposfile",
+	db="repos",
 	charset='utf8'
 )
 ast_vocab_to_int = json.load(open("vocab_ast.json", 'r'))
+tokens_vocab_to_int = json.load(open("vocab_tokens.json", 'r'))
+
+def splitToken(token):
+	subtokens = []
+	start = 0
+	l = len(token)
+	end = start + 1
+	while start < l:
+		sb = ""
+		sb += token[start].lower()
+		end = start + 1
+		while end < l and token[end].islower():
+			sb += token[end]
+			end += 1
+		subtokens.append(sb)
+		if end < l:
+			start = end
+		else:
+			break
+	return subtokens
+
+
+def subtokenToNum(data, vocab_to_int):
+	if len(data) < 5:
+		for i in range(5 - len(data)):
+			data.append("<PAD>")
+	elif len(data) > 5:
+		data = data[:5]
+	res = []
+	for z in data:
+		res.append(vocab_to_int.get(z, 1))
+	return res
+
+
+def updateVocab(vocab):
+	size = len(vocab)
+	keyWord = {
+		"abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "continue",
+		"default", "do", "double", "else", "enum", "exports", "extends", "final", "finally", "float", "for",
+		"if", "implements", "import", "instanceof", "int", "interface", "long", "long", "module", "native", "new",
+		"package", "private", "protected", "public", "requires", "return", "short", "static", "strictfp", "super",
+		"switch", "synchronized",
+		"this", "throw", "throws", "transient", "try", "void", "volatile", "while", "true", "null", "false", "var",
+		"const", "goto"
+	}
+	keyWord = list(keyWord)
+	stopwords = {
+		"i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yourself", "yourselves",
+		"he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself", "they", "them", "their",
+		"theirs", "themselves", "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is",
+		"are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing",
+		"a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", "with",
+		"about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "from",
+		"up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there",
+		"when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such",
+		"no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don",
+		"should", "now", "lbrace", "rbrace", "dot", "comma", "eq", "semi", "lparen", "rparen", "colon", "lbracket",
+		"rbracket",
+		"lt", "gt", "{", "}", "(", ")", "[", "]", ",", "."
+	}
+	stopwords = list(stopwords)
+	for i in range(len(keyWord)):
+		vocab.update([(keyWord[i], size + i)])
+	size = len(vocab)
+	for i in range(len(stopwords)):
+		vocab.update([(stopwords[i], size + i)])
+
+	return vocab
+
+tokens_vocab_to_int = updateVocab(tokens_vocab_to_int)
 
 cursor = conn.cursor()
-sql = "select id, ast from reposfile_new "
-sql2 = " update reposfile_new set astindex = %s where id = %s "
+sql = "select id, ast from reposfile where id > 500000 and id < 1500000"
+sql2 = " update repos_index set astindex = %s, firstindex = %s, lastindex = %s " \
+       " where id = %s "
 cursor.execute(sql)
 conn.commit()
 data = cursor.fetchall()
+
+
 for row in data:
-
 	ast = json.loads(row[1])
-	npath = getNPathSimplify(ast, 100)
+	npath = getNPathSimplify(ast, 220)
 	npaths = []
+	nfirst = []
+	nlast = []
 	for path in npath:
-		npaths.append(astToNum(path, ast_vocab_to_int))
-	cursor.execute(sql2, (json.dumps(npaths), row[0]))
-
+		path = parseInput(path)
+		nfirst.append(subtokenToNum(splitToken(path[0]), tokens_vocab_to_int))
+		nlast.append(subtokenToNum(splitToken(path[-1]), tokens_vocab_to_int))
+		npaths.append(astToNum(path[1:-1], ast_vocab_to_int))
+	cursor.execute(sql2, (json.dumps(npaths), json.dumps(nfirst), json.dumps(nlast), row[0]))
 conn.commit()

@@ -1,5 +1,6 @@
 import numpy as np
-from tensorflow.python.keras.layers import Concatenate, Dot, Embedding, Lambda, Activation, LSTM, Dense, Dropout
+from tensorflow.python.keras.layers import Concatenate, Dot, Embedding, Lambda, Activation, Dense, Dropout
+from tensorflow.python.keras.layers import CuDNNLSTM as LSTM
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.engine import Input
 from tensorflow.python.keras import backend as K
@@ -65,10 +66,10 @@ class JointEmbeddingModel:
         methodname_dropout = dropout(methodname_embedding)
 
         # forward rnn
-        fw_rnn = LSTM(self.lstm_dims, recurrent_dropout=0.2, return_sequences=True, name='lstm_methodname_fw')
+        fw_rnn = LSTM(self.lstm_dims, name='lstm_methodname_fw')
 
         # backward rnn
-        bw_rnn = LSTM(self.lstm_dims, recurrent_dropout=0.2, return_sequences=True, go_backwards=True, name='lstm_methodname_bw')
+        bw_rnn = LSTM(self.lstm_dims, go_backwards=True, name='lstm_methodname_bw')
 
         methodname_fw = fw_rnn(methodname_dropout)
         methodname_bw = bw_rnn(methodname_dropout)
@@ -78,8 +79,7 @@ class JointEmbeddingModel:
         methodname_bw_dropout = dropout(methodname_bw)
 
         # max pooling
-        maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]), name='maxpooling_methodname')
-        methodname_pool = Concatenate(name='concat_methodname_lstm')([maxpool(methodname_fw_dropout), maxpool(methodname_bw_dropout)])
+        methodname_pool = Concatenate(name='concat_methodname_lstm')([methodname_fw_dropout, methodname_bw_dropout])
         activation = Activation('tanh', name='active_methodname')
         methodname_repr = activation(methodname_pool)
 
@@ -100,10 +100,10 @@ class JointEmbeddingModel:
         apiseq_dropout = dropout(apiseq_embedding)
 
         # forward rnn
-        fw_rnn = LSTM(self.lstm_dims, return_sequences=True, recurrent_dropout=0.2, name='lstm_apiseq_fw')
+        fw_rnn = LSTM(self.lstm_dims, name='lstm_apiseq_fw')
 
         # backward rnn
-        bw_rnn = LSTM(self.lstm_dims, return_sequences=True, recurrent_dropout=0.2, go_backwards=True, name='lstm_apiseq_bw')
+        bw_rnn = LSTM(self.lstm_dims, go_backwards=True, name='lstm_apiseq_bw')
 
         apiseq_fw = fw_rnn(apiseq_dropout)
         apiseq_bw = bw_rnn(apiseq_dropout)
@@ -114,8 +114,7 @@ class JointEmbeddingModel:
 
         # max pooling
 
-        maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),name='maxpooling_apiseq')
-        apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
+        apiseq_pool = Concatenate(name='concat_apiseq_lstm')([apiseq_fw_dropout, apiseq_bw_dropout])
         activation = Activation('tanh', name='active_apiseq')
         apiseq_repr = activation(apiseq_pool)
 
@@ -139,10 +138,10 @@ class JointEmbeddingModel:
         tokens_dropout = dropout(tokens_embedding)
 
         # forward rnn
-        fw_rnn = LSTM(self.lstm_dims, recurrent_dropout=0.2, return_sequences=True, name='lstm_tokens_fw')
+        fw_rnn = LSTM(self.lstm_dims, name='lstm_tokens_fw')
 
         # backward rnn
-        bw_rnn = LSTM(self.lstm_dims, recurrent_dropout=0.2, return_sequences=True, go_backwards=True, name='lstm_tokens_bw')
+        bw_rnn = LSTM(self.lstm_dims, go_backwards=True, name='lstm_tokens_bw')
 
         tokens_fw = fw_rnn(tokens_dropout)
         tokens_bw = bw_rnn(tokens_dropout)
@@ -152,8 +151,7 @@ class JointEmbeddingModel:
         tokens_bw_dropout = dropout(tokens_bw)
 
         # max pooling
-        maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]), name='maxpooling_tokens')
-        tokens_pool = Concatenate(name='concat_tokens_lstm')([maxpool(tokens_fw_dropout), maxpool(tokens_bw_dropout)])
+        tokens_pool = Concatenate(name='concat_tokens_lstm')([tokens_fw_dropout, tokens_bw_dropout])
         # tokens_pool = maxpool(tokens_dropout)
         activation = Activation('tanh', name='active_tokens')
         tokens_repr = activation(tokens_pool)
@@ -190,10 +188,10 @@ class JointEmbeddingModel:
         desc_dropout = dropout(desc_embedding)
 
         # forward rnn
-        fw_rnn = LSTM(self.lstm_dims, recurrent_dropout=0.2, return_sequences=True, name='lstm_desc_fw')
+        fw_rnn = LSTM(self.lstm_dims, name='lstm_desc_fw')
 
         # backward rnn
-        bw_rnn = LSTM(self.lstm_dims, recurrent_dropout=0.2, return_sequences=True, go_backwards=True, name='lstm_desc_bw')
+        bw_rnn = LSTM(self.lstm_dims, go_backwards=True, name='lstm_desc_bw')
 
         desc_fw = fw_rnn(desc_dropout)
         desc_bw = bw_rnn(desc_dropout)
@@ -204,8 +202,7 @@ class JointEmbeddingModel:
 
         # max pooling
 
-        maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]), name='maxpooling_desc')
-        desc_pool = Concatenate(name='concat_desc_lstm')([maxpool(desc_fw_dropout), maxpool(desc_bw_dropout)])
+        desc_pool = Concatenate(name='concat_desc_lstm')([desc_fw_dropout, desc_bw_dropout])
         activation = Activation('tanh', name='active_desc')
         desc_repr = activation(desc_pool)
 
@@ -234,8 +231,8 @@ class JointEmbeddingModel:
                                     outputs=[loss], name='training_model')
 
         self.training_model.summary()
-    def compile(self, optimizer, **kwargs):
-        #optimizer = optimizers.Adam(lr=0.001)
+    def compile(self, **kwargs):
+        optimizer = optimizers.Adam(lr=0.001)
         self.code_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
         self.desc_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
         self.training_model.compile(loss=lambda y_true, y_pred: y_pred+y_true-y_true, optimizer=optimizer, **kwargs)

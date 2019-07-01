@@ -51,17 +51,28 @@ class JointEmbeddingModel:
 		methodname = Input(shape=(self.methname_len,), dtype='int32', name='methodname')
 		apiseq = Input(shape=(self.apiseq_len,), dtype='int32', name='apiseq')
 		tokens = Input(shape=(self.tokens_len,), dtype='int32', name='tokens')
-		astpath = []
-		firstNode = []
-		lastNode = []
-		for i in range(self.astpath_num):
-			astpath.append(Input(shape=(self.astpath_len,), dtype='int32', name='astpath' + str(i)))
-		for i in range(self.astpath_num):
-			firstNode.append(Input(shape=(self.methname_len,), dtype='int32', name='leaf' + str(i)))
-		for i in range(self.astpath_num):
-			lastNode.append(Input(shape=(self.methname_len,), dtype='int32', name='leaf' + str(i)))
-			
-		# tokens
+
+		##
+		astpath = Input(shape=(self.astpath_num, self.astpath_len), dtype='int32', name='ast')
+		firstNode = Input(shape=(self.astpath_num, self.methname_len), dtype='int32', name='first')
+		lastNode = Input(shape=(self.astpath_num, self.methname_len), dtype='int32', name='last')
+		astpath = tf.reshape(astpath, shape=(-1, self.astpath_num*self.astpath_len))
+		firstNode = tf.reshape(firstNode, shape=(-1, self.astpath_num*self.methname_len))
+		lastNode = tf.reshape(lastNode, shape=(-1, self.astpath_num*self.methname_len))
+		##
+
+
+		# astpath = []
+		# firstNode = []
+		# lastNode = []
+		# for i in range(self.astpath_num):
+		# 	astpath.append(Input(shape=(self.astpath_len,), dtype='int32', name='astpath' + str(i)))
+		# for i in range(self.astpath_num):
+		# 	firstNode.append(Input(shape=(self.methname_len,), dtype='int32', name='leaf' + str(i)))
+		# for i in range(self.astpath_num):
+		# 	lastNode.append(Input(shape=(self.methname_len,), dtype='int32', name='leaf' + str(i)))
+
+		# 2 tokens
 		# embedding layer
 		init_emd_weights = np.load(
 			self.data_dir + self.init_embed_weights_tokens) if self.init_embed_weights_tokens is not None else None
@@ -71,7 +82,7 @@ class JointEmbeddingModel:
 			input_dim=self.vocab_size,
 			output_dim=self.embed_dims,
 			weights=init_emd_weights,
-			mask_zero=False,
+			mask_zero=True,
 			name='embedding_tokens'
 		)
 
@@ -80,14 +91,14 @@ class JointEmbeddingModel:
 		# dropout
 		dropout = Dropout(0.25, name='dropout_tokens_embed')
 		tokens_dropout = dropout(tokens_embedding)
-		# max pooling
-		maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
-		                 name='maxpooling_tokens')
-		tokens_pool = maxpool(tokens_dropout)
-		activation = Activation('tanh', name='active_tokens')
-		tokens_repr = activation(tokens_pool)
+		# # max pooling
+		# maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
+		#                  name='maxpooling_tokens')
+		# tokens_pool = maxpool(tokens_dropout)
+		# activation = Activation('tanh', name='active_tokens')
+		# tokens_repr = activation(tokens_pool)
 
-		# ast
+		# 3 ast
 		embedding = Embedding(
 			input_dim=self.ast_words,
 			output_dim=self.embed_dims,
@@ -98,40 +109,59 @@ class JointEmbeddingModel:
 		dropout = Dropout(0.25, name='dropout_ast_embed')
 
 		# forward rnn
-		fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_ast_fw')
+		fw_rnn = LSTM(self.lstm_dims,  return_sequences=True, name='lstm_ast_fw')
 
 		# backward rnn
-		bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_ast_bw')
+		bw_rnn = LSTM(self.lstm_dims,  return_sequences=True, go_backwards=True, name='lstm_ast_bw')
 
-		astpath_embed = [embedding(x) for x in astpath]
-		# astpath_embed = dropout(astpath_embed)
-		# astpath_out_fw = dropout(add([fw_rnn(x) for x in astpath_embed]))
-		# astpath_out_bw = dropout(add([bw_rnn(x) for x in astpath_embed]))
-		astpath_out_fw = fw_rnn(astpath_embed[0])
-		for i in range(1, self.astpath_num):
-			astpath_out_fw = add([astpath_out_fw, fw_rnn(astpath_embed[i])])
-		# astpath_out_fw = dropout(astpath_out_fw)
+		##
 
-		astpath_out_bw = bw_rnn(astpath_embed[0])
-		for i in range(1, self.astpath_num):
-			astpath_out_bw = add([astpath_out_bw, bw_rnn(astpath_embed[i])])
-		# astpath_out_bw = dropout(astpath_out_bw)
 
-		# todo:average pooling
-		avepool = Lambda(lambda x: K.mean(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
-		                     name='averagepooling_astpath')
-		# astpath_pool = maxpool(astpath_out_fw)
-		astpath_pool = Concatenate(name='ast_concatenate', )([avepool(astpath_out_fw), avepool(astpath_out_bw)])
+		astpath_fw = fw_rnn(astpath)
+		astpath_bw = bw_rnn(astpath)
+		first_embed = tokens_embedding(firstNode)
+		last_embed = tokens_embedding(lastNode)
+		astpath_fw = tf.reshape(astpath_fw, shape=(-1, self.astpath_num, self.astpath_len, self.lstm_dims))
+		astpath_bw = tf.reshape(astpath_bw, shape=(-1, self.astpath_num, self.astpath_len, self.lstm_dims))
+		first_embed = tf.reshape(first_embed, shape=(-1, self.astpath_num, self.methname_len, self.embed_dims))
+		last_embed = tf.reshape(last_embed, shape=(-1, self.astpath_num, self.methname_len, self.embed_dims))
 
-		#leafNode
-		first_embed = embedding_tokens(firstNode)
-		last_embed = embedding_tokens(lastNode)
-		astpath_pool = Concatenate(name='ast_tokens', )([astpath_pool, first_embed, last_embed])
+		maxpool = Lambda(lambda x: K.max(x, axis=2, keepdims=False), output_shape=lambda x: (x[0], x[1], x[3]),
+		                 name='maxpooling_ast')
+		sumpool = Lambda(lambda x: K.sum(x, axis=2, keepdims=False), output_shape=lambda x: (x[0], x[1], x[3]),
+		                 name='maxpooling_node')
 
-		# fully connection
-		astpath_fully_repr = Dense(self.hidden_dims, 'tanh', name='fully_connect_astpath')(astpath_pool)
+		astpath_fw_pool = maxpool(astpath_fw)
+		astpath_bw_pool = maxpool(astpath_bw)
+		first_sumpool = sumpool(first_embed)
+		last_sumpool = sumpool(last_embed)
+		astpath_concat = Concatenate(axis=1, name='astpathConcat')(astpath_bw_pool, astpath_fw_pool, first_sumpool, last_sumpool)
+		astpath_out = Dense(self.hidden_dims, 'tanh', name='astpath')(astpath_concat)
 
-		# methodname
+		meanpool = Lambda(lambda x: K.mean(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
+		                 name='meanpooling_astpaths')
+		astpath_repr = meanpool(astpath_out)
+		##
+
+
+		# astpath_embed = [embedding(x) for x in astpath]
+		# first_embed = [tokens_embedding(x) for x in firstNode]
+		# last_embed = [tokens_embedding(x) for x in lastNode]
+		#
+		# astpaths_out = []
+		# for i in range(self.astpath_num):
+		# 	fw = fw_rnn(astpath_embed[i])
+		# 	bw = bw_rnn(astpath_embed[i])
+		# 	first = K.sum(first_embed[i], axis=1)
+		# 	last = K.sum(last_embed[i], axis=1)
+		# 	path_out = Concatenate(name='path', )(fw, bw, first, last)  # 4*hidden
+		# 	path_out = Dense(self.hidden_dims, 'tanh', name='astpath')(path_out)
+		# 	astpaths_out.append(path_out)
+		#
+		# astpath_out = add(astpaths_out)
+		# astpath_repr = astpath_out / 100
+
+		# 4 methodname
 		# embedding layer
 		init_emd_weights = np.load(
 			self.data_dir + self.init_embed_weights_methodname) if self.init_embed_weights_methodname is not None else None
@@ -172,7 +202,7 @@ class JointEmbeddingModel:
 		activation = Activation('tanh', name='active_methodname')
 		methodname_repr = activation(methodname_pool)
 
-		# apiseq
+		# 5 apiseq
 		# embedding layer
 		embedding = Embedding(
 			input_dim=self.vocab_size,
@@ -186,12 +216,12 @@ class JointEmbeddingModel:
 		# dropout
 		dropout = Dropout(0.25, name='dropout_apiseq_embed')
 		apiseq_dropout = dropout(apiseq_embedding)
-
-		# forward rnn
-		fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_apiseq_fw')
-
-		# backward rnn
-		bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_apiseq_bw')
+		#
+		# # forward rnn
+		# fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_apiseq_fw')
+		#
+		# # backward rnn
+		# bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_apiseq_bw')
 
 		# apiseq_fw = fw_rnn(apiseq_dropout)
 		# apiseq_bw = bw_rnn(apiseq_dropout)
@@ -202,18 +232,18 @@ class JointEmbeddingModel:
 
 		# max pooling
 
-		maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
-		                 name='maxpooling_apiseq')
-		# apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
-		apiseq_pool = maxpool(apiseq_dropout)
-		activation = Activation('tanh', name='active_apiseq')
-		apiseq_repr = activation(apiseq_pool)
+		# maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
+		#                  name='maxpooling_apiseq')
+		# # apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
+		# apiseq_pool = maxpool(apiseq_dropout)
+		# activation = Activation('tanh', name='active_apiseq')
+		# apiseq_repr = activation(apiseq_pool)
 
 
 		# fusion methodname, apiseq, tokens
-		merge_ast_repr = Concatenate(name='merge_methname_ast')([methodname_repr, astpath_fully_repr])
-		merge_methname_api = Concatenate(name='merge_methname_api')([merge_ast_repr, apiseq_repr])
-		merge_code_repr = Concatenate(name='merge_code_repr')([merge_methname_api, tokens_repr])
+		merge_ast_repr = Concatenate(name='merge_methname_ast')([methodname_repr, astpath_repr])
+		# merge_methname_api = Concatenate(name='merge_methname_api')([merge_ast_repr, ])
+		merge_code_repr = Concatenate(name='merge_code_repr')([merge_ast_repr, tokens_dropout])
 
 		code_repr = Dense(self.hidden_dims, activation='tanh', name='dense_coderepr')(merge_code_repr)
 

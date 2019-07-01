@@ -235,7 +235,7 @@ class JointEmbeddingModel:
                                     outputs=[loss], name='training_model')
 
         self.training_model.summary()
-    def compile(self, optimizer, **kwargs):
+    def compile(self, **kwargs):
         optimizer = optimizers.Adam(lr=0.001)
         self.code_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
         self.desc_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)

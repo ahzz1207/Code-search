@@ -1,9 +1,9 @@
 import tensorflow as tf
-# from tensorflow.python.keras.backend import set_session
-# config = tf.compat.v1.ConfigProto()
-# config.gpu_options.allow_growth=True
-# session = tf.compat.v1.Session(config=config)
-# set_session(session)
+from tensorflow.python.keras.backend import set_session
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth=True
+session = tf.compat.v1.Session(config=config)
+set_session(session)
 import pickle
 import tables
 import configs
@@ -17,7 +17,7 @@ import threading
 from utils import normalize, cos_np_for_normalized, cos_np
 from models import *
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 class CodeSearcher:
 	def __init__(self, conf):
@@ -80,9 +80,6 @@ class CodeSearcher:
 		chunk_apiseq = self.load_hdf5(self.path + self.conf.train_apiseq, offset, chunk_size)
 		chunk_tokens = self.load_hdf5(self.path + self.conf.train_tokens, offset, chunk_size)
 		chunk_descs = self.load_hdf5(self.path + self.conf.train_desc, offset, chunk_size)
-		with open('read2.txt', 'w') as f:
-			f.write(str(chunk_methnames))
-			f.close()
 		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs
 
 	def load_valid_data(self, chunk_size):
@@ -141,46 +138,20 @@ class CodeSearcher:
 		return pad_sequences(data, maxlen=len, padding='post', truncating='post', value=0)
 
 	def save_model_epoch(self, model, epoch):
-		if not os.path.exists(self.path + 'models3/new/' + self.conf.model_name + '/'):
-			os.makedirs(self.path + 'models3/new/' + self.conf.model_name + '/')
+		if not os.path.exists(self.path + 'models3/new2/' + self.conf.model_name + '/'):
+			os.makedirs(self.path + 'models3/new2/' + self.conf.model_name + '/')
 
-		model.save("{}models3/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models3/new/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
+		model.save("{}models3/new2/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models3/new2/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
 		           overwrite=True)
 
 	def load_model_epoch(self, model, epoch):
 		assert os.path.exists(
 			"{}models3/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
 			, "Weights at epoch {:d} not found".format(epoch)
-		assert os.path.exists(
-			"{}models3/new/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch)) \
-			, "Weights at epoch {:d} not found".format(epoch)
+
 		model.load("{}models3/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
 		           "{}models3/new/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
-		print("Load model %epoch" % epoch)
-
-	def save_model2_epoch(self, model, epoch):
-		if not os.path.exists(self.path + 'models22/transformer2/' + self.conf.model_name + '/'):
-			os.makedirs(self.path + 'models22/transformer2/' + self.conf.model_name + '/')
-		files = os.listdir(self.path + 'models22/transformer2/' + self.conf.model_name + '/');
-
-		if len(files) > 10:
-			os.remove(self.path + 'models22/transformer2/' + self.conf.model_name + '/' + files[0])
-			os.remove(self.path + 'models22/transformer2/' + self.conf.model_name + '/' + files[1])
-
-		model.save("{}models22/transformer2/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models22/transformer2/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
-		           overwrite=True)
-
-	def load_model2_epoch(self, model, epoch):
-		assert os.path.exists(
-			"{}models/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
-			, "Weights at epoch {:d} not found".format(epoch)
-		assert os.path.exists(
-			"{}models/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch)) \
-			, "Weights at epoch {:d} not found".format(epoch)
-		model.load("{}models/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
 		print("Load model %epoch" % epoch)
 
 
@@ -213,8 +184,8 @@ class CodeSearcher:
 
 			if hist.history['val_loss'][0] < val_loss['loss']:
 				val_loss = {'loss': hist.history['val_loss'][0], 'epoch': i}
-				self.save_model_epoch(model, i)
-			elif i % save_every == 0:
+
+			if i % save_every == 0:
 				self.save_model_epoch(model, i)
 
 			print('Best: Loss = {}, Epoch = {}'.format(val_loss['loss'], val_loss['epoch']))
@@ -426,9 +397,7 @@ if __name__ == '__main__':
 	#  Define model
 	model = eval(conf.model_name)(conf)
 	model.build()
-	optimizer = conf.optimizer
-
-	model.compile(optimizer=optimizer)
+	model.compile()
 
 	if mode == 'train':
 		codesearcher.train(model)
@@ -439,7 +408,7 @@ if __name__ == '__main__':
 		if conf.reload > 0:
 			codesearcher.load_model_epoch(model, conf.reload)
 		# acc, mrr = codesearcher.valid(model, 2000, 10)
-		acc, mrr, map, ndcg = codesearcher.eval(model, 2000, 10)
+		acc, mrr, map, ndcg = codesearcher.eval(model, -1, 10)
 		print("Eval result is :")
 		print(acc, mrr, map, ndcg)
 
