@@ -183,7 +183,7 @@ def updateVocab(vocab):
 tokens_vocab_to_int = updateVocab(tokens_vocab_to_int)
 
 cursor = conn.cursor()
-sql = "select id, ast from reposfile where id > 500000 and id < 1500000"
+sql = "select id, ast from reposfile where id > 3200000 and id < 3527218"
 sql2 = " update repos_index set astindex = %s, firstindex = %s, lastindex = %s " \
        " where id = %s "
 cursor.execute(sql)
@@ -203,4 +203,4 @@ for row in data:
 		nlast.append(subtokenToNum(splitToken(path[-1]), tokens_vocab_to_int))
 		npaths.append(astToNum(path[1:-1], ast_vocab_to_int))
 	cursor.execute(sql2, (json.dumps(npaths), json.dumps(nfirst), json.dumps(nlast), row[0]))
-conn.commit()
+	conn.commit()

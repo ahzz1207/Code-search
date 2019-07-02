@@ -13,11 +13,10 @@ import random
 from scipy.stats import rankdata
 import traceback
 import threading
-from utils import normalize, cos_np_for_normalized, cos_np
-from models import *
+from utils import normalize, cos_np_for_normalized
+from models_notoken import *
 import pymysql
-import ASTutils
-import json
+import numpy as np
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -36,9 +35,10 @@ class CodeSearcher:
 		self.vocab_tokens2 = []
 		self.vocab_desc2 = []
 		self.vocab_ast2 = []
-
+		self.vocab_first2 = []
+		self.vocab_last2 = []
 		self.data_dic = {'meth': self.vocab_methname2, 'apiseq': self.vocab_apiseq2, 'tokens': self.vocab_tokens2,
-		                 'desc': self.vocab_desc2, 'ast': self.vocab_ast2}
+		                 'desc': self.vocab_desc2, 'ast': self.vocab_ast2, 'first': self.vocab_first2, 'last': self.vocab_last2}
 		self.data_len = 0
 		self.code_base = None
 		self.code_base_chunksize = 1000000
@@ -49,7 +49,7 @@ class CodeSearcher:
 		return pickle.load(open(filename, 'rb'))
 
 	def get_dataset(self):
-		conn = pymysql.Connect(
+		self.conn = pymysql.Connect(
 			host="10.131.252.198",
 			port=3306,
 			user="root",
@@ -58,45 +58,30 @@ class CodeSearcher:
 			charset='utf8'
 		)
 
-		cursor = conn.cursor()
-		sql = "select methindex, tokensindex, descindex, apiseqnew from repos2index2_self"
-		cursor.execute(sql)
-		conn.commit()
-		data_ = cursor.fetchall()
+		self.cursor = self.conn.cursor()
+		# sql = "select methindex, tokensindex, descindex, apiseq, astindex, firstindex, lastindex, from repos_index_valid order by rand()"
+		sql = "select id, count(id) from repos_index"
+		self.cursor.execute(sql)
+		self.conn.commit()
+		data = self.cursor.fetchall()
+		self.data_len = data[0]
+		# self.data_len = len(data)
+		# for row in data:
+		# 	self.vocab_methname2.append(row[0])
+		# 	self.vocab_tokens2.append(row[1])
+		# 	self.vocab_desc2.append(row[2])
+		# 	self.vocab_apiseq2.append(row[3])
+		# 	self.vocab_ast2.append(row[4])
+		# 	self.vocab_first2.append(row[5])
+		# 	self.vocab_last2.append(row[6])
+		print("All index init succes, it's length ：%d" % len(data))
 
-		sql2 = "select ast from reposfile_new where id in (select id from repos2index2_self)"
-		cursor.execute(sql2)
-		conn.commit()
-		ast = cursor.fetchall()
-
-		data = []
-		for i in range(len(data_)):
-			row = []
-			for x in data_[i]:
-				row.append(x)
-			row.append(ast[i][0])
-			data.append(row)
-
-		np.random.shuffle(data)
-		del data_, ast
-
-		self.data_len = len(data)
-		for row in data:
-			self.vocab_methname2.append(row[0])
-			self.vocab_tokens2.append(row[1])
-			self.vocab_desc2.append(row[2])
-			self.vocab_apiseq2.append(row[3])
-			self.vocab_ast2.append(row[4])
-
-		self.ast_vocab_to_int = json.load(open("vocab_ast.json", 'r'))
-		if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
-			print("All index init succes, it's length ：%d" % len(data))
-		cursor.close()
-		conn.close()
-		del data
+	# cursor.close()
+	# conn.close()
+	# del data
 
 	def get_valid_dataset(self):
-		conn = pymysql.Connect(
+		self.conn = pymysql.Connect(
 			host="10.131.252.198",
 			port=3306,
 			user="root",
@@ -104,23 +89,27 @@ class CodeSearcher:
 			db="githubreposfile",
 			charset='utf8'
 		)
-		cursor = conn.cursor()
-		sql = "select methindex, tokensindex, descindex, apiseq, astindex, firstindex, lastindex, from repos_index_valid order by rand()"
-		cursor.execute(sql)
-		conn.commit()
-		data = cursor.fetchall()
-		for row in data:
-			self.vocab_methname2.append(row[0])
-			self.vocab_tokens2.append(row[1])
-			self.vocab_desc2.append(row[2])
-			self.vocab_apiseq2.append(row[3])
-			self.vocab_ast2.append(json.loads(row[4], object_hook='list'))
 
-		if len(self.vocab_methname2) == len(self.vocab_apiseq2) == len(self.vocab_desc2) == len(self.vocab_apiseq2):
-			self.data_len = len(data)
-			print("All index init succes, it's length ：%d" % len(data))
-		cursor.close()
-		conn.close()
+		self.cursor = self.conn.cursor()
+		# sql = "select methindex, tokensindex, descindex, apiseq, astindex, firstindex, lastindex, from repos_index_valid order by rand()"
+		sql = "select id, count(id) from repos_index"
+		self.cursor.execute(sql)
+		self.conn.commit()
+		data = self.cursor.fetchall()
+		self.data_len = data[0]
+		# self.data_len = len(data)
+		# for row in data:
+		# 	self.vocab_methname2.append(row[0])
+		# 	self.vocab_tokens2.append(row[1])
+		# 	self.vocab_desc2.append(row[2])
+		# 	self.vocab_apiseq2.append(row[3])
+		# 	self.vocab_ast2.append(row[4])
+		# 	self.vocab_first2.append(row[5])
+		# 	self.vocab_last2.append(row[6])
+		print("All index init succes, it's length ：%d" % len(data))
+		# cursor.close()
+		# conn.close()
+		# del data
 
 	def get_training_data(self, name, start_offset, chunk_size):
 		if chunk_size == -1:
@@ -134,13 +123,9 @@ class CodeSearcher:
 				chunk_size = start_offset + chunk_size - self.data_len
 				offset = 0
 				start_offset = 0
-			if name == 'ast':
-
-
-				sentns.append(self.data_dic['ast'][offset])
+			if name == 'ast' or name == 'first' or name == 'last':
+				sentns.append(self.data_dic[name][offset])
 			else:
-
-
 				sentns.append(np.array([int(x, base=10) for x in self.data_dic[name][offset].strip().split(' ')]))
 			offset += 1
 		return sentns
@@ -185,14 +170,38 @@ class CodeSearcher:
 				sents.append(sent)
 		return sents
 
-	def load_train_data(self, offset, chunk_size):
-		chunk_methnames = self.get_training_data('meth', offset, chunk_size)
-		chunk_apiseq = self.get_training_data('apiseq', offset, chunk_size)
-		chunk_tokens = self.get_training_data('tokens', offset, chunk_size)
-		chunk_descs = self.get_training_data('desc', offset, chunk_size)
-		chunk_asts = self.get_training_data('ast', offset, chunk_size)
-		chunk_first = self.get_training_data('first', offset, chunk_size)
-		chunk_last = self.get_training_data('last', offset, chunk_size)
+	def load_train_data(self, start_offset, chunk_size):
+		# chunk_methnames = self.get_training_data('meth', offset, chunk_size)
+		# chunk_apiseq = self.get_training_data('apiseq', offset, chunk_size)
+		# chunk_tokens = self.get_training_data('tokens', offset, chunk_size)
+		# chunk_descs = self.get_training_data('desc', offset, chunk_size)
+		# chunk_asts = self.get_training_data('ast', offset, chunk_size)
+		# chunk_first = self.get_training_data('first', offset, chunk_size)
+		# chunk_last = self.get_training_data('last', offset, chunk_size)
+		chunk_methnames = []
+		chunk_apiseq = []
+		chunk_tokens = []
+		chunk_descs = []
+		chunk_asts = []
+		chunk_first = []
+		chunk_last = []
+		sql = "select methindex, tokensindex, descindex, apiseq, astindex, firstindex, lastindex, from repos_index where " \
+		      " id > %s and id < %s order by rand()"
+
+		start_offset = start_offset % self.data_len
+		if start_offset + chunk_size > self.data_len:
+			chunk_size = start_offset + chunk_size - self.data_len
+
+		self.cursor.execute(sql, (start_offset, start_offset+chunk_size))
+		data = self.cursor.fetchall()
+		for row in data:
+			chunk_methnames.append(row[0])
+			chunk_apiseq.append(row[1])
+			chunk_tokens.append(row[2])
+			chunk_descs.append(row[3])
+			chunk_asts.append(row[4])
+			chunk_first.append(row[5])
+			chunk_last.append(row[6])
 		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs, chunk_asts, chunk_first, chunk_last
 
 	def load_valid_data(self, chunk_size):
@@ -284,7 +293,6 @@ class CodeSearcher:
 		for i in range(self.conf.reload, nb_epoch):
 			print('Epoch %d' % i, end=' ')
 
-
 			chunk_methnames, chunk_apiseqs, chunk_tokens, chunk_descs, chunk_asts, chunk_first, chunk_last \
 				= self.load_train_data(i * self.conf.chunk_size, self.conf.chunk_size)
 
@@ -295,10 +303,6 @@ class CodeSearcher:
 					continue
 				else:
 					index.append(inter)
-			for inter in index:
-				del chunk_asts[inter]
-				del chunk_first[inter]
-				del chunk_last[inter]
 
 			chunk_padded_methnames = self.pad(chunk_methnames, self.conf.methname_len)
 			chunk_padded_apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
@@ -306,25 +310,36 @@ class CodeSearcher:
 			chunk_padded_astspaths = []
 			chunk_padded_first = []
 			chunk_padded_last = []
-			for z in range(self.conf.path_num):
-				chunk_path = []
-				chunk_f = []
-				chunk_l = []
-				for j in range(len(chunk_asts)):  # 一个epoch数据量
-					chunk_path.append(chunk_asts[j][z])
-					chunk_f.append(chunk_first[j][z])
-					chunk_l.append(chunk_last[j][z])
-				chunk_padded_astspaths.append(np.array(chunk_path))
-				chunk_padded_first.append(np.array(chunk_f))
-				chunk_padded_last.append(np.array(chunk_l))
+			for j in range(len(chunk_asts)):
+				if j not in index:
+						chunk_padded_astspaths.append(chunk_asts[j])
+						chunk_padded_first.append(chunk_first[j])
+						chunk_padded_last.append(chunk_last[j])
+			chunk_padded_astspaths = np.array(chunk_padded_astspaths)
+			chunk_padded_first = np.array(chunk_padded_first)
+			chunk_padded_last = np.array(chunk_padded_last)
 
+			# for z in range(self.conf.path_num):
+			# 	chunk_path = []
+			# 	chunk_f = []
+			# 	chunk_l = []
+			# 	for j in range(len(chunk_asts)):  # 一个epoch数据量
+			# 		if j not in index:
+			# 			chunk_path.append(chunk_asts[j][z])
+			# 			chunk_f.append(chunk_first[j][z])
+			# 			chunk_l.append(chunk_last[j][z])
+			# 	chunk_padded_astspaths.append(np.array(chunk_path))
+			# 	chunk_padded_first.append(np.array(chunk_f))
+			# 	chunk_padded_last.append(np.array(chunk_l))
 
 			chunk_padded_good_descs = self.pad(chunk_descs, self.conf.desc_len)
 			chunk_bad_descs = [desc for desc in chunk_descs]
 			random.shuffle(chunk_bad_descs)
 			chunk_padded_bad_descs = self.pad(chunk_bad_descs, self.conf.desc_len)
 
-			inputs = [chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens]+chunk_padded_astspaths+[chunk_padded_good_descs, chunk_padded_bad_descs]
+			# inputs = [chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens]+chunk_padded_astspaths+chunk_first+chunk_last+[chunk_padded_good_descs, chunk_padded_bad_descs]
+			inputs = [chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens, chunk_padded_astspaths,
+			          chunk_padded_first, chunk_padded_last, chunk_padded_good_descs, chunk_padded_bad_descs]
 			hist = model.fit(x=inputs, epochs=1, batch_size=batch_size, validation_split=split)
 
 			if hist.history['val_loss'][0] < val_loss['loss']:

@@ -29,7 +29,7 @@ class JointEmbeddingModel:
         self.init_embed_weights_tokens = config.init_embed_weights_tokens
         self.init_embed_weights_desc = config.init_embed_weights_desc
 
-        self.methodname = Input(shape=(self.methname_len,),dtype='int32', name='methodname')
+        self.methodname = Input(shape=(self.methname_len,), dtype='int32', name='methodname')
         self.apiseq = Input(shape=(self.apiseq_len,), dtype='int32', name='apiseq')
         self.tokens = Input(shape=(self.tokens_len,), dtype='int32', name='tokens')
         self.desc_good = Input(shape=(self.desc_len,), dtype='int32', name='desc_good')

@@ -25,6 +25,7 @@ class JointEmbeddingModel:
 		self.hidden_dims = config.hidden_dims
 		self.astpath_len = config.astpath_len
 		self.astpath_num = config.path_num
+		self.node_words = config.node_words
 
 		self.margin = 0.05
 
@@ -37,9 +38,9 @@ class JointEmbeddingModel:
 		self.tokens = Input(shape=(self.tokens_len,), dtype='int32', name='tokens')
 		self.desc_good = Input(shape=(self.desc_len,), dtype='int32', name='desc_good')
 		self.desc_bad = Input(shape=(self.desc_len,), dtype='int32', name='desc_bad')
-		self.astpath = []
-		for i in range(self.astpath_num):
-			self.astpath.append(Input(shape=(self.astpath_len,), dtype='int32', name='astpath' + str(i)))
+		self.astpath = Input(shape=(self.astpath_num, self.astpath_len), dtype='int32', name='astpaths')
+		self.firstNode = Input(shape=(self.astpath_num, self.methname_len), dtype='int32', name='firstNodes')
+		self.lastNode = Input(shape=(self.astpath_num, self.methname_len), dtype='int32', name='lastNodes')
 
 		# create path to store model Info
 		if not os.path.exists(self.data_dir + 'model/' + self.model_name):
@@ -53,12 +54,13 @@ class JointEmbeddingModel:
 		tokens = Input(shape=(self.tokens_len,), dtype='int32', name='tokens')
 
 		##
-		astpath = Input(shape=(self.astpath_num, self.astpath_len), dtype='int32', name='ast')
-		firstNode = Input(shape=(self.astpath_num, self.methname_len), dtype='int32', name='first')
-		lastNode = Input(shape=(self.astpath_num, self.methname_len), dtype='int32', name='last')
-		astpath = tf.reshape(astpath, shape=(-1, self.astpath_num*self.astpath_len))
-		firstNode = tf.reshape(firstNode, shape=(-1, self.astpath_num*self.methname_len))
-		lastNode = tf.reshape(lastNode, shape=(-1, self.astpath_num*self.methname_len))
+		astpath = Input(shape=(self.astpath_num, self.astpath_len,), dtype='int32', name='astpaths')
+		firstNode = Input(shape=(self.astpath_num, self.methname_len,), dtype='int32', name='firstNodes')
+		lastNode = Input(shape=(self.astpath_num, self.methname_len,), dtype='int32', name='lastNodes')
+
+		astpaths = tf.reshape(astpath, shape=(-1, self.astpath_num*self.astpath_len))
+		firstNodes = tf.reshape(firstNode, shape=(-1, self.astpath_num*self.methname_len))
+		lastNodes = tf.reshape(lastNode, shape=(-1, self.astpath_num*self.methname_len))
 		##
 
 
@@ -82,21 +84,32 @@ class JointEmbeddingModel:
 			input_dim=self.vocab_size,
 			output_dim=self.embed_dims,
 			weights=init_emd_weights,
-			mask_zero=True,
+			mask_zero=False,
 			name='embedding_tokens'
 		)
 
 		tokens_embedding = embedding_tokens(tokens)
 
 		# dropout
-		dropout = Dropout(0.25, name='dropout_tokens_embed')
-		tokens_dropout = dropout(tokens_embedding)
-		# # max pooling
-		# maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
-		#                  name='maxpooling_tokens')
+
+		# forward rnn
+		fw_rnn = LSTM(self.lstm_dims, name='lstm_tokens_fw')
+
+		# backward rnn
+		bw_rnn = LSTM(self.lstm_dims, go_backwards=True, name='lstm_tokens_bw')
+
+		tokens_fw = fw_rnn(tokens_embedding)
+		tokens_bw = bw_rnn(tokens_embedding)
+
+		dropout = Dropout(0.25, name='dropout_tokens_rnn')
+		tokens_fw_dropout = dropout(tokens_fw)
+		tokens_bw_dropout = dropout(tokens_bw)
+
+		# max pooling
+		tokens_pool = Concatenate(name='concat_tokens_lstm')([tokens_fw_dropout, tokens_bw_dropout])
 		# tokens_pool = maxpool(tokens_dropout)
-		# activation = Activation('tanh', name='active_tokens')
-		# tokens_repr = activation(tokens_pool)
+		activation = Activation('tanh', name='active_tokens')
+		tokens_repr = activation(tokens_pool)
 
 		# 3 ast
 		embedding = Embedding(
@@ -106,6 +119,15 @@ class JointEmbeddingModel:
 			mask_zero=False,
 			name='embedding_ast'
 		)
+
+		nodembedding = Embedding(
+			input_dim=self.node_words,
+			output_dim=self.embed_dims,
+			weights=None,
+			mask_zero=True,
+			name='embedding_Node'
+		)
+
 		dropout = Dropout(0.25, name='dropout_ast_embed')
 
 		# forward rnn
@@ -116,11 +138,11 @@ class JointEmbeddingModel:
 
 		##
 
-
-		astpath_fw = fw_rnn(astpath)
-		astpath_bw = bw_rnn(astpath)
-		first_embed = tokens_embedding(firstNode)
-		last_embed = tokens_embedding(lastNode)
+		ast_embed = embedding(astpaths)
+		astpath_fw = fw_rnn(ast_embed)
+		astpath_bw = bw_rnn(ast_embed)
+		first_embed = nodembedding(firstNodes)
+		last_embed = nodembedding(lastNodes)
 		astpath_fw = tf.reshape(astpath_fw, shape=(-1, self.astpath_num, self.astpath_len, self.lstm_dims))
 		astpath_bw = tf.reshape(astpath_bw, shape=(-1, self.astpath_num, self.astpath_len, self.lstm_dims))
 		first_embed = tf.reshape(first_embed, shape=(-1, self.astpath_num, self.methname_len, self.embed_dims))
@@ -135,7 +157,7 @@ class JointEmbeddingModel:
 		astpath_bw_pool = maxpool(astpath_bw)
 		first_sumpool = sumpool(first_embed)
 		last_sumpool = sumpool(last_embed)
-		astpath_concat = Concatenate(axis=1, name='astpathConcat')(astpath_bw_pool, astpath_fw_pool, first_sumpool, last_sumpool)
+		astpath_concat = Concatenate(axis=2, name='astpathConcat')([astpath_bw_pool, astpath_fw_pool, first_sumpool, last_sumpool])
 		astpath_out = Dense(self.hidden_dims, 'tanh', name='astpath')(astpath_concat)
 
 		meanpool = Lambda(lambda x: K.mean(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
@@ -204,18 +226,18 @@ class JointEmbeddingModel:
 
 		# 5 apiseq
 		# embedding layer
-		embedding = Embedding(
-			input_dim=self.vocab_size,
-			output_dim=self.embed_dims,
-			mask_zero=False,
-			name='embedding_apiseq'
-		)
-
-		apiseq_embedding = embedding(apiseq)
-
-		# dropout
-		dropout = Dropout(0.25, name='dropout_apiseq_embed')
-		apiseq_dropout = dropout(apiseq_embedding)
+		# embedding = Embedding(
+		# 	input_dim=self.vocab_size,
+		# 	output_dim=self.embed_dims,
+		# 	mask_zero=False,
+		# 	name='embedding_apiseq'
+		# )
+		#
+		# apiseq_embedding = embedding(apiseq)
+		#
+		# # dropout
+		# dropout = Dropout(0.25, name='dropout_apiseq_embed')
+		# apiseq_dropout = dropout(apiseq_embedding)
 		#
 		# # forward rnn
 		# fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_apiseq_fw')
@@ -243,11 +265,12 @@ class JointEmbeddingModel:
 		# fusion methodname, apiseq, tokens
 		merge_ast_repr = Concatenate(name='merge_methname_ast')([methodname_repr, astpath_repr])
 		# merge_methname_api = Concatenate(name='merge_methname_api')([merge_ast_repr, ])
-		merge_code_repr = Concatenate(name='merge_code_repr')([merge_ast_repr, tokens_dropout])
+		merge_code_repr = Concatenate(name='merge_code_repr')([merge_ast_repr, tokens_repr])
 
 		code_repr = Dense(self.hidden_dims, activation='tanh', name='dense_coderepr')(merge_code_repr)
 
-		self.code_repr_model = Model(inputs=[methodname, apiseq, tokens, astpath], outputs=[code_repr], name='code_repr_model')
+		self.code_repr_model = Model(inputs=[methodname, apiseq, tokens, astpath, firstNode, lastNode],
+		                             outputs=[code_repr], name='code_repr_model')
 		self.code_repr_model.summary()
 
 		#  2 -- description
@@ -298,12 +321,12 @@ class JointEmbeddingModel:
 		self.desc_repr_model.summary()
 
 		#  3 -- cosine similarity
-		code_repr = self.code_repr_model([methodname, apiseq, tokens, astpath])
+		code_repr = self.code_repr_model([methodname, apiseq, tokens, astpath, firstNode, lastNode])
 		desc_repr = self.desc_repr_model([desc])
 
 		cos_sim = Dot(axes=1, normalize=True, name='cos_sim')([code_repr, desc_repr])
 
-		sim_model = Model(inputs=[methodname, apiseq, tokens, astpath, desc], outputs=[cos_sim], name='sim_model')
+		sim_model = Model(inputs=[methodname, apiseq, tokens, astpath, firstNode, lastNode, desc], outputs=[cos_sim], name='sim_model')
 
 		self.sim_model = sim_model
 
