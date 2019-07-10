@@ -90,9 +90,9 @@ class CodeSearcher:
 		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs
 
 	def load_use_data(self):
-		methnames = self.load_hdf5(self.path + self.conf.valid_methodname, 0, -1)
-		apiseq = self.load_hdf5(self.path + self.conf.valid_apiseq, 0, -1)
-		tokens = self.load_hdf5(self.path + self.conf.valid_tokens, 0, -1)
+		methnames = self.load_hdf5(self.path + self.conf.use_methodname, 0, -1)
+		apiseq = self.load_hdf5(self.path + self.conf.use_apiseq, 0, -1)
+		tokens = self.load_hdf5(self.path + self.conf.use_tokens, 0, -1)
 		return methnames, apiseq, tokens
 
 	def load_codebase(self):
@@ -147,11 +147,11 @@ class CodeSearcher:
 
 	def load_model_epoch(self, model, epoch):
 		assert os.path.exists(
-			"{}models3/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
+			"{}models2/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
 			, "Weights at epoch {:d} not found".format(epoch)
 
-		model.load("{}models3/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models3/new/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
+		model.load("{}models2/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models2/new/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
 		print("Load model %epoch" % epoch)
 
 
@@ -392,7 +392,7 @@ class CodeSearcher:
 if __name__ == '__main__':
 	conf = configs.conf()
 	codesearcher = CodeSearcher(conf)
-	mode = 'eval'
+	mode = 'search'
 
 	#  Define model
 	model = eval(conf.model_name)(conf)

@@ -49,7 +49,7 @@ class conf:
 		self.valid_every = 20
 		self.n_eval = 100
 		self.save_every = 20
-		self.reload = 0
+		self.reload = 500
 
 		self.embed_dims = 100
 		self.hidden_dims = 400

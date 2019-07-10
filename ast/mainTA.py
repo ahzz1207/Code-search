@@ -7,7 +7,7 @@ session = tf.compat.v1.Session(config=config)
 set_session(session)
 import pickle
 import tables
-import configs
+import configsA
 import codecs
 import random
 from scipy.stats import rankdata
@@ -16,6 +16,7 @@ import threading
 from utils import normalize, cos_np_for_normalized
 from models_notoken import *
 import pymysql
+import json
 import numpy as np
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -24,21 +25,7 @@ class CodeSearcher:
 	def __init__(self, conf):
 		self.conf = conf
 		self.path = self.conf.data_dir
-		# self.vocab_methname = self.load_pickle(self.path + self.conf.vocab_methname)
-		# self.vocab_apiseq = self.load_pickle(self.path + self.conf.vocab_apiseq)
-		# self.vocab_tokens = self.load_pickle(self.path + self.conf.vocab_tokens)
-		# self.vocab_desc = self.load_pickle(self.path + self.conf.vocab_desc)
-		# self.vocab_ast = self.load_pickle(self.path + self.conf.vocab_ast)
 
-		self.vocab_methname2 = []
-		self.vocab_apiseq2 = []
-		self.vocab_tokens2 = []
-		self.vocab_desc2 = []
-		self.vocab_ast2 = []
-		self.vocab_first2 = []
-		self.vocab_last2 = []
-		self.data_dic = {'meth': self.vocab_methname2, 'apiseq': self.vocab_apiseq2, 'tokens': self.vocab_tokens2,
-		                 'desc': self.vocab_desc2, 'ast': self.vocab_ast2, 'first': self.vocab_first2, 'last': self.vocab_last2}
 		self.data_len = 0
 		self.code_base = None
 		self.code_base_chunksize = 1000000
@@ -54,17 +41,18 @@ class CodeSearcher:
 			port=3306,
 			user="root",
 			passwd="17210240114",
-			db="githubreposfile",
+			db="repos",
 			charset='utf8'
 		)
 
 		self.cursor = self.conn.cursor()
 		# sql = "select methindex, tokensindex, descindex, apiseq, astindex, firstindex, lastindex, from repos_index_valid order by rand()"
-		sql = "select id, count(id) from repos_index"
-		self.cursor.execute(sql)
-		self.conn.commit()
-		data = self.cursor.fetchall()
-		self.data_len = data[0]
+		# sql = "select id, count(id) from repos_index"
+		# self.cursor.execute(sql)
+		# self.conn.commit()
+		# data = self.cursor.fetchall()
+		# self.data_len = len(data[0])
+		self.data_len = 3527218
 		# self.data_len = len(data)
 		# for row in data:
 		# 	self.vocab_methname2.append(row[0])
@@ -74,7 +62,7 @@ class CodeSearcher:
 		# 	self.vocab_ast2.append(row[4])
 		# 	self.vocab_first2.append(row[5])
 		# 	self.vocab_last2.append(row[6])
-		print("All index init succes, it's length ：%d" % len(data))
+		print("All index init succes, it's length ：%d" % self.data_len)
 
 	# cursor.close()
 	# conn.close()
@@ -86,30 +74,12 @@ class CodeSearcher:
 			port=3306,
 			user="root",
 			passwd="17210240114",
-			db="githubreposfile",
+			db="repos",
 			charset='utf8'
 		)
-
 		self.cursor = self.conn.cursor()
-		# sql = "select methindex, tokensindex, descindex, apiseq, astindex, firstindex, lastindex, from repos_index_valid order by rand()"
-		sql = "select id, count(id) from repos_index"
-		self.cursor.execute(sql)
-		self.conn.commit()
-		data = self.cursor.fetchall()
-		self.data_len = data[0]
-		# self.data_len = len(data)
-		# for row in data:
-		# 	self.vocab_methname2.append(row[0])
-		# 	self.vocab_tokens2.append(row[1])
-		# 	self.vocab_desc2.append(row[2])
-		# 	self.vocab_apiseq2.append(row[3])
-		# 	self.vocab_ast2.append(row[4])
-		# 	self.vocab_first2.append(row[5])
-		# 	self.vocab_last2.append(row[6])
-		print("All index init succes, it's length ：%d" % len(data))
-		# cursor.close()
-		# conn.close()
-		# del data
+		self.data_len = 10000
+		print("All index init succes, it's length ：%d" % self.data_len)
 
 	def get_training_data(self, name, start_offset, chunk_size):
 		if chunk_size == -1:
@@ -151,33 +121,8 @@ class CodeSearcher:
 		table.close()
 		return sents
 
-	def load_txt_data(self, file, start_offset, chunk_size):
-		with open(file, 'r') as f:
-			lines = f.readlines()
-			data_len = len(lines)
-			if chunk_size == -1:  # load all data
-				chunk_size = data_len
-			start_offset = start_offset % data_len
-			offset = start_offset
-			sents = []
-			while offset < start_offset + chunk_size:
-				if offset >= data_len:
-					chunk_size = start_offset + chunk_size - data_len
-					start_offset = 0
-					offset = 0
-				sent = [int(x, base=10) for x in lines[offset].rstrip().split(' ')]
-				offset += 1
-				sents.append(sent)
-		return sents
 
-	def load_train_data(self, start_offset, chunk_size):
-		# chunk_methnames = self.get_training_data('meth', offset, chunk_size)
-		# chunk_apiseq = self.get_training_data('apiseq', offset, chunk_size)
-		# chunk_tokens = self.get_training_data('tokens', offset, chunk_size)
-		# chunk_descs = self.get_training_data('desc', offset, chunk_size)
-		# chunk_asts = self.get_training_data('ast', offset, chunk_size)
-		# chunk_first = self.get_training_data('first', offset, chunk_size)
-		# chunk_last = self.get_training_data('last', offset, chunk_size)
+	def load_train_data(self, start_offset, chunk_size, sql, train=True):
 		chunk_methnames = []
 		chunk_apiseq = []
 		chunk_tokens = []
@@ -185,24 +130,49 @@ class CodeSearcher:
 		chunk_asts = []
 		chunk_first = []
 		chunk_last = []
-		sql = "select methindex, tokensindex, descindex, apiseq, astindex, firstindex, lastindex, from repos_index where " \
-		      " id > %s and id < %s order by rand()"
 
 		start_offset = start_offset % self.data_len
-		if start_offset + chunk_size > self.data_len:
-			chunk_size = start_offset + chunk_size - self.data_len
 
-		self.cursor.execute(sql, (start_offset, start_offset+chunk_size))
+		if train:
+			if start_offset + chunk_size > self.data_len:
+				chunk_size = start_offset + chunk_size - self.data_len
+				sql = "select methindex, tokens, descindex, apiseq, astindex, firstindex, lastindex from repos_index where id > %s or id <= %s order by rand()"
+				self.cursor.execute(sql, (start_offset, chunk_size))
+			else:
+				self.cursor.execute(sql, (start_offset, start_offset+chunk_size))
+		else:
+			self.cursor.execute(sql)
+
 		data = self.cursor.fetchall()
 		for row in data:
-			chunk_methnames.append(row[0])
-			chunk_apiseq.append(row[1])
-			chunk_tokens.append(row[2])
-			chunk_descs.append(row[3])
-			chunk_asts.append(row[4])
-			chunk_first.append(row[5])
-			chunk_last.append(row[6])
-		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs, chunk_asts, chunk_first, chunk_last
+			chunk_methnames.append(np.array([int(x, base=10) for x in row[0].strip().split(' ')]))
+			# chunk_apiseq.append(np.array([int(x, base=10) for x in row[3].strip().split(' ')]))
+			# chunk_tokens.append(np.array([int(x, base=10) for x in row[1].strip().split(' ')]))
+			chunk_descs.append(np.array([int(x, base=10) for x in row[2].strip().split(' ')]))
+			chunk_asts.append(json.loads(row[4], object_hook='list'))
+			chunk_first.append(json.loads(row[5], object_hook='list'))
+			chunk_last.append(json.loads(row[6], object_hook='list'))
+
+		chunk_padded_astspaths = []
+		chunk_padded_first = []
+		chunk_padded_last = []
+		# for z in range(len(chunk_asts)):
+		# 	asts = []
+		# 	first = []
+		# 	last = []
+		# 	for j in range(220):
+		# 		if j not in index:
+		# 			asts.append(chunk_asts[z][j])
+		# 			first.append(chunk_first[z][j])
+		# 			last.append(chunk_last[z][j])
+		# 	chunk_padded_first.append(first)
+		# 	chunk_padded_last.append(last)
+		# 	chunk_padded_astspaths.append(asts)
+		chunk_padded_first = np.asarray(chunk_first)
+		chunk_padded_astspaths = np.asarray(chunk_asts)
+		chunk_padded_last = np.asarray(chunk_last)
+
+		return chunk_methnames, chunk_descs, chunk_padded_astspaths, chunk_padded_first, chunk_padded_last
 
 	def load_valid_data(self, chunk_size):
 		chunk_methnames = self.load_hdf5(self.path + self.conf.valid_methodname, 0, chunk_size)
@@ -260,22 +230,20 @@ class CodeSearcher:
 		return pad_sequences(data, maxlen=len, padding='post', truncating='post', value=0)
 
 	def save_model_epoch(self, model, epoch):
-		if not os.path.exists(self.path + 'modelsA/' + self.conf.model_name + '/'):
-			os.makedirs(self.path + 'modelsA/' + self.conf.model_name + '/')
+		if not os.path.exists(self.path + 'modelsB/' + self.conf.model_name + '/'):
+			os.makedirs(self.path + 'modelsB/' + self.conf.model_name + '/')
 
-		model.save("{}modelsA/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}modelsA/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
+		model.save("{}modelsB/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}modelsB/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
 		           overwrite=True)
 
 	def load_model_epoch(self, model, epoch):
 		assert os.path.exists(
-			"{}modelsA/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
+			"{}modelsB/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
 			, "Weights at epoch {:d} not found".format(epoch)
-		assert os.path.exists(
-			"{}modelsA/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch)) \
-			, "Weights at epoch {:d} not found".format(epoch)
-		model.load("{}modelsA/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}modelsA/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
+
+		model.load("{}modelsB/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}modelsB/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
 		print("Load model %epoch" % epoch)
 
 
@@ -289,35 +257,14 @@ class CodeSearcher:
 		nb_epoch = self.conf.nb_epoch
 		split = self.conf.validation_split
 		val_loss = {'loss': 1., 'epoch': 0}
-
+		sql = "select methindex, tokens, descindex, apiseq, astindex, firstindex, lastindex from repos_index where id > %s and id <= %s"
 		for i in range(self.conf.reload, nb_epoch):
 			print('Epoch %d' % i, end=' ')
 
-			chunk_methnames, chunk_apiseqs, chunk_tokens, chunk_descs, chunk_asts, chunk_first, chunk_last \
-				= self.load_train_data(i * self.conf.chunk_size, self.conf.chunk_size)
-
-			index = []
-			while len(index) < 220 - self.conf.path_num:
-				inter = random.randrange(0, 220)
-				if inter in index:
-					continue
-				else:
-					index.append(inter)
+			chunk_methnames, chunk_descs, chunk_asts, chunk_first, chunk_last \
+				= self.load_train_data(i * self.conf.chunk_size, self.conf.chunk_size, sql)
 
 			chunk_padded_methnames = self.pad(chunk_methnames, self.conf.methname_len)
-			chunk_padded_apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
-			chunk_padded_tokens = self.pad(chunk_tokens, self.conf.tokens_len)
-			chunk_padded_astspaths = []
-			chunk_padded_first = []
-			chunk_padded_last = []
-			for j in range(len(chunk_asts)):
-				if j not in index:
-						chunk_padded_astspaths.append(chunk_asts[j])
-						chunk_padded_first.append(chunk_first[j])
-						chunk_padded_last.append(chunk_last[j])
-			chunk_padded_astspaths = np.array(chunk_padded_astspaths)
-			chunk_padded_first = np.array(chunk_padded_first)
-			chunk_padded_last = np.array(chunk_padded_last)
 
 			# for z in range(self.conf.path_num):
 			# 	chunk_path = []
@@ -338,16 +285,14 @@ class CodeSearcher:
 			chunk_padded_bad_descs = self.pad(chunk_bad_descs, self.conf.desc_len)
 
 			# inputs = [chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens]+chunk_padded_astspaths+chunk_first+chunk_last+[chunk_padded_good_descs, chunk_padded_bad_descs]
-			inputs = [chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens, chunk_padded_astspaths,
-			          chunk_padded_first, chunk_padded_last, chunk_padded_good_descs, chunk_padded_bad_descs]
-			hist = model.fit(x=inputs, epochs=1, batch_size=batch_size, validation_split=split)
+			inputs = [chunk_padded_methnames, chunk_asts, chunk_first, chunk_last, chunk_padded_good_descs, chunk_padded_bad_descs]
+			hist = model.fit(x=inputs, epochs=1, batch_size=batch_size, validation_split=split, shuffle=True)
 
 			if hist.history['val_loss'][0] < val_loss['loss']:
 				val_loss = {'loss': hist.history['val_loss'][0], 'epoch': i}
-				# self.save_model_epoch(model, i)
-			if i % save_every == 0:
 				self.save_model_epoch(model, i)
-			del chunk_padded_astspaths
+			elif i % save_every == 0:
+				self.save_model_epoch(model, i)
 			print('Best: Loss = {}, Epoch = {}'.format(val_loss['loss'], val_loss['epoch']))
 			# if valid_every is not None and i % valid_every == 0:
 			# 	acc1, mrr = self.valid(model, 1000, 1)
@@ -355,19 +300,11 @@ class CodeSearcher:
 
 
 	def valid(self, model, poolsize, K):
-		#  poolsize - size of the code pool, if -1, load the whole test set
-		if self._eval_sets is None:
-			# self._eval_sets = dict([(s, self.load(s)) for s in ['dev', 'test1', 'test2']])
-			methnames, apiseqs, tokens, descs = self.load_valid_data(poolsize)
-			self._eval_sets = dict()
-			self._eval_sets['methnames'] = methnames
-			self._eval_sets['apiseqs'] = apiseqs
-			self._eval_sets['tokens'] = tokens
-			self._eval_sets['descs'] = descs
 
+		data_len = poolsize
+		#  poolsize - size of the code pool, if -1, load the whole test set
 		c_1, c_2 = 0, 0
-		data_len = len(self._eval_sets['descs'])
-		for i in range(data_len):
+		for i in range(poolsize):
 			bad_descs = [desc for desc in self._eval_sets['descs']]
 			random.shuffle(bad_descs)
 			descs = bad_descs
@@ -447,51 +384,36 @@ class CodeSearcher:
 
 		# load valid dataset
 		self.get_valid_dataset()
-		if self._eval_sets is None:
-			self._eval_sets = dict()
-			self._eval_sets['methnames'] = self.get_training_data(name='meth', start_offset=0, chunk_size=poolsize)
-			self._eval_sets['apiseqs'] = self.get_training_data(name='apiseq', start_offset=0, chunk_size=poolsize)
-			self._eval_sets['tokens'] = self.get_training_data(name='tokens', start_offset=0, chunk_size=poolsize)
-			self._eval_sets['descs'] = self.get_training_data(name='desc', start_offset=0, chunk_size=poolsize)
-			self._eval_sets['ast'] = self.get_training_data(name='ast', start_offset=0, chunk_size=poolsize)
 		acc, mrr, map, ndcg = 0, 0, 0, 0
-		data_len = len(self._eval_sets['descs'])
+		data_len = poolsize
 		batch_size = self.conf.valid_batch_size
+		sql = "select methindex, tokens, descindex, apiseq, astindex, firstindex, lastindex from repos_valid"
+		chunk_methnames, chunk_descs, chunk_asts, chunk_first, chunk_last \
+			= self.load_train_data(0, data_len, sql, False)
 
 		print("Eval dataSet length %d" % data_len)
 		for i in range(data_len):
-			desc = self._eval_sets['descs'][i]  # good desc
-			descs = self.pad([desc] * data_len, self.conf.desc_len)
-			methnames = self.pad(self._eval_sets['methnames'], self.conf.methname_len)
-			apiseqs = self.pad(self._eval_sets['apiseqs'], self.conf.apiseq_len)
-			tokens = self.pad(self._eval_sets['tokens'], self.conf.tokens_len)
-			# chunk_padded_astspaths = np.array(self._eval_sets['ast'])
 
-			# chunk_astspaths = ASTutils.getPathSimplify(self._eval_sets['ast'], self.conf.path_num, self.ast_vocab_to_int)
-			# chunk_padded_astspaths = []
-			# for z in range(self.conf.path_num):
-			# 	chunk_path = []
-			# 	for j in range(len(chunk_astspaths)):  # 一个epoch数据量
-			# 		chunk_path.append(chunk_astspaths[j][z])  # 每个数据的第i条path作为一个单元的输入 需要pad
-			# 	chunk_padded_astspaths.append(self.pad(chunk_path, self.conf.astpath_len))
+			desc = chunk_descs[i]  # good desc
+			descs = self.pad([desc] * data_len, self.conf.desc_len)
+			methnames = self.pad(chunk_methnames, self.conf.methname_len)
+			# apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
+			# tokens = self.pad(chunk_tokens, self.conf.tokens_len)
 
 			n_results = K
 			sims = []
-			ast = []
 			for j in range(data_len // batch_size):
-				for z in range(self.conf.path_num):
-					path = []
-					for x in range(j*batch_size, (j+1)*batch_size):
-						path.append(self._eval_sets['ast'][x][z])
-					ast.append(np.array(path))
 
-				inputs = [methnames[j*batch_size: (j+1)*batch_size], apiseqs[j*batch_size: (j+1)*batch_size],
-				          tokens[j*batch_size: (j+1)*batch_size]] + ast + [descs[j*batch_size: (j+1)*batch_size]]
+
+				inputs = [methnames[j*batch_size: (j+1)*batch_size], chunk_asts[j*batch_size: (j+1)*batch_size],
+				          chunk_first[j*batch_size: (j+1)*batch_size], chunk_last[j*batch_size: (j+1)*batch_size],
+				          descs[j*batch_size: (j+1)*batch_size]]
 
 				sim = model.predict(x=inputs, batch_size=batch_size)
 				for x in sim:
 					sims.append(x)
-
+			# inputs = [methnames, apiseqs, tokens, chunk_asts, chunk_first, chunk_last, descs]
+			# sims = model.predict(x=inputs, batch_size=batch_size)
 			negsims = np.negative(sims)
 			predict = np.argsort(negsims)  # predict = np.argpartition(negsims, kth=n_results-1)
 			predict = predict[:n_results]
@@ -574,9 +496,9 @@ class CodeSearcher:
 
 
 if __name__ == '__main__':
-	conf = configs.conf()
+	conf = configsA.conf()
 	codesearcher = CodeSearcher(conf)
-	mode = 'eval'
+	mode = 'train'
 	#  Define model
 	model = eval(conf.model_name)(conf)
 	model.build()
