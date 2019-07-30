@@ -18,13 +18,11 @@ class JointEmbeddingModel:
 		self.apiseq_len = config.apiseq_len
 		self.tokens_len = config.tokens_len
 		self.desc_len = config.desc_len
-		self.ast_words = config.ast_words
 		self.vocab_size = config.n_words  # the size of vocab
 		self.embed_dims = config.embed_dims
 		self.lstm_dims = config.lstm_dims
 		self.hidden_dims = config.hidden_dims
-		self.astpath_len = config.astpath_len
-		self.astpath_num = config.path_num
+
 
 		self.margin = 0.05
 
@@ -295,7 +293,7 @@ class JointEmbeddingModel:
 
 		self.training_model.summary()
 
-	def compile(self, optimizer, **kwargs):
+	def compile(self, **kwargs):
 		optimizer = optimizers.Adam(lr=0.001)
 		self.code_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
 		self.desc_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)

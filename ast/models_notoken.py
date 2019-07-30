@@ -71,7 +71,7 @@ class JointEmbeddingModel:
 		firstNode = Input(shape=(self.astpath_num, 5,), dtype='int32', name='firstNodes')
 		lastNode = Input(shape=(self.astpath_num, 5,), dtype='int32', name='lastNodes')
 
-		astpaths = tf.reshape(astpath, shape=(-1, self.astpath_num*self.astpath_len))
+		astpaths = tf.reshape(astpath, shape=(-1, self.astpath_len))
 		firstNodes = tf.reshape(firstNode, shape=(-1, self.astpath_num*5))
 		lastNodes = tf.reshape(lastNode, shape=(-1, self.astpath_num*5))
 		##
@@ -145,10 +145,10 @@ class JointEmbeddingModel:
 		dropout = Dropout(0.5, name='dropout_ast_embed')
 
 		# forward rnn
-		fw_rnn = LSTM(self.lstm_dims,  return_sequences=True, name='lstm_ast_fw')
+		fw_rnn = LSTM(self.lstm_dims, name='lstm_ast_fw')
 
 		# backward rnn
-		bw_rnn = LSTM(self.lstm_dims,  return_sequences=True, go_backwards=True, name='lstm_ast_bw')
+		bw_rnn = LSTM(self.lstm_dims, go_backwards=True, name='lstm_ast_bw')
 
 		##
 		ast_embed = embedding(astpaths)
@@ -164,21 +164,21 @@ class JointEmbeddingModel:
 		zeros = tf.zeros_like(first_embed)
 		first_embed = tf.where(first_mask, first_embed, zeros)
 		last_embed = tf.where(last_mask, last_embed, zeros)
-		astpath_fw = tf.reshape(astpath_fw, shape=(-1, self.astpath_num, self.astpath_len, self.lstm_dims))
-		astpath_bw = tf.reshape(astpath_bw, shape=(-1, self.astpath_num, self.astpath_len, self.lstm_dims))
+		astpath_fw = tf.reshape(astpath_fw, shape=(-1, self.astpath_num, self.lstm_dims))
+		astpath_bw = tf.reshape(astpath_bw, shape=(-1, self.astpath_num, self.lstm_dims))
 		first_embed = tf.reshape(first_embed, shape=(-1, self.astpath_num, 5, self.embed_dims))
 		last_embed = tf.reshape(last_embed, shape=(-1, self.astpath_num, 5, self.embed_dims))
 
-		maxpool = Lambda(lambda x: K.mean(x, axis=2, keepdims=False), output_shape=lambda x: (x[0], x[1], x[3]),
-		                 name='maxpooling_ast')
+		# maxpool = Lambda(lambda x: K.mean(x, axis=2, keepdims=False), output_shape=lambda x: (x[0], x[1], x[3]),
+		#                  name='maxpooling_ast')
 		sumpool = Lambda(lambda x: K.sum(x, axis=2, keepdims=False), output_shape=lambda x: (x[0], x[1], x[3]),
 		                 name='maxpooling_node')
 
-		astpath_fw_pool = maxpool(astpath_fw)
-		astpath_bw_pool = maxpool(astpath_bw)
+		# astpath_fw_pool = maxpool(astpath_fw)
+		# astpath_bw_pool = maxpool(astpath_bw)
 		first_sumpool = sumpool(first_embed)
 		last_sumpool = sumpool(last_embed)
-		astpath_concat = Concatenate(axis=2, name='astpathConcat')([astpath_fw_pool, astpath_bw_pool, first_sumpool, last_sumpool])
+		astpath_concat = Concatenate(axis=2, name='astpathConcat')([astpath_fw, astpath_bw, first_sumpool, last_sumpool])
 		astpath_out = Dense(self.lstm_dims, 'tanh', name='astpath')(astpath_concat)
 
 		meanpool = Lambda(lambda x: K.mean(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
@@ -368,7 +368,7 @@ class JointEmbeddingModel:
 		self.training_model.summary()
 
 	def compile(self, optimizer, **kwargs):
-		optimizer = optimizers.Adam(lr=0.001)
+		optimizer = optimizers.Adam(lr=0.0002)
 		self.code_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
 		self.desc_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
 		self.training_model.compile(loss=lambda y_true, y_pred: y_pred + y_true - y_true, optimizer=optimizer, **kwargs)

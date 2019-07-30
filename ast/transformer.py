@@ -15,7 +15,7 @@ class Embedding(Layer):
 		# self.lookup = self.add_weight(name='lookup', shape=[vocab_size, self.model_dim],
 		#                               initializer=k.init_ops.glorot_uniform_initializer, dtype=tf.float32, trainable=True)
 		# self.lookup = tf.concat((tf.zeros(shape=(1, units), dtype=tf.float32), self.lookup[1:, :]), axis=0)
-		self.scale = math.sqrt(units)
+		self.scale = int(math.sqrt(units))
 
 	def call(self, inputs):
 		embdding = self.embdding(inputs)
@@ -35,7 +35,7 @@ class positionFeedForward(Layer):
 	# just two layer feedforward
 	def __init__(self, model_dim, name, ffn_dim=512, dropout=0.2):
 		super(positionFeedForward, self).__init__(name=name + 'FFN')
-		self.dense1 = layers.Dense(ffn_dim, 'relu')
+		self.dense1 = layers.Dense(2*ffn_dim, 'relu')
 		self.dense2 = layers.Dense(model_dim)
 		self.dropout = dropout
 
@@ -50,8 +50,6 @@ class positionEmbedding(Layer):
 	def __init__(self, model_dim, max_len, name, dropout=0.2):
 		super(positionEmbedding, self).__init__(name=name + 'poEmbed')
 		self.model_dim = model_dim
-		self.dropout = dropout
-		self.max_len = max_len
 		# position = tf.tile(tf.expand_dims(tf.range(max_len), 0), [128, 1])  # Batch, length
 		position_enc = np.array([[pos / np.power(10000, 2. * i / model_dim) for i in range(model_dim)]
 		                         for pos in range(max_len)])  # length dim
@@ -91,7 +89,7 @@ class positionEmbedding(Layer):
 class layerNorm(Layer):
 	def __init__(self, name, model_dim):
 		super(layerNorm, self).__init__(name=name + 'layerNorm')
-		self.eps = 1e-8
+		self.eps = 256
 		self.a = tf.Variable(tf.ones(model_dim))
 		self.b = tf.Variable(tf.zeros(model_dim))
 
@@ -100,7 +98,7 @@ class layerNorm(Layer):
 		# std = tf.math.reduce_std(x, axis=-1, keepdims=True)
 		mean, var = tf.nn.moments(x, axes=-1, keepdims=True)
 		std = tf.sqrt(var + self.eps)
-		return 0.5 * self.a * (x - mean) / (std + self.eps) + self.b
+		return self.a * (x - mean) / (std + self.eps) + self.b
 
 
 # return (x - mean) / (std + self.eps)
@@ -120,18 +118,18 @@ class encoder_layer(Layer):
 
 	def call(self, x, mask):
 		# self_attention
-		atten_output = self.self_atten(self.norm(x), mask=mask)
+		atten_output = self.self_atten(x, mask=mask)
 		# add & norm
 		output_1 = tf.nn.dropout(atten_output, self.dropout) + x
 		# going to feed forward
 		output_2 = tf.nn.dropout(self.feed_forward(self.norm(output_1)), self.dropout) + output_1
 		# add & norm
-		return output_2
+		return self.norm(output_2)
 
 
 # stack encoder_layer to the encoder
 class encoder(Layer):
-	def __init__(self, hidden, self_atten, feed_forward, name, dropout=0.2, n_layers=8):
+	def __init__(self, hidden, self_atten, feed_forward, name, dropout=0.2, n_layers=2):
 		super(encoder, self).__init__(name=name + 'encoder')
 		self.encoder_layers = [encoder_layer(hidden, self_atten, feed_forward, dropout, name=str(i)) for i in
 		                       range(n_layers)]
@@ -158,14 +156,14 @@ class self_atten(Layer):
 		self.n_heads = n_heads
 		self.model_dim = model_dim
 		self.dropout = dropout
+		self.term = tf.constant(math.sqrt(self.head_dim), dtype=tf.float32)
+
 
 	def attention(self, query, key, value, dropout=0.1, src_mask=None):
-		head_dim = query.shape[-1]
 		# q * k & scale(sqr(dim)) -> None,length, n_heads, dim/n_heads,
-		term = tf.constant(math.sqrt(int(head_dim)), dtype=tf.float32)
 
 		key = tf.transpose(key, [0, 1, 3, 2])
-		key = key / term
+		key = key / self.term
 		atten_weight = tf.matmul(query, key)
 		# None, n_heads, length, length
 		# if src_mask is not None:
@@ -220,6 +218,8 @@ class EncoderModel(Layer):
 		self.n_heads = n_heads
 		self.ffn_dim = ffn_dim
 		self.dropout_rate = droput_rate
+
+		self.dense = layers.Dense(units=model_dim, name="embed2model")
 		print('init the ' + name)
 		self.attention = self_atten(n_heads, model_dim, name, droput_rate)
 		self.feedForward = positionFeedForward(model_dim, name, ffn_dim)
@@ -231,11 +231,11 @@ class EncoderModel(Layer):
 		embed = self.vocab_embed(inputs)
 		embed = self.position_embed(embed)
 		#
-
 		pad_mask, src_mask = getMask(inputs)
 		pad_mask = tf.tile(tf.expand_dims(pad_mask, axis=2), [1, 1, self.embed_dim])
-		zero = tf.zeros([128] + list(embed.shape[1:]))
+		zero = tf.zeros([inputs.shape[0]] + list(embed.shape[1:]))
 		embed = tf.where(tf.equal(pad_mask, False), zero, embed)
 		embed = tf.nn.dropout(embed, rate=0.1)
+		embed = self.dense(embed)
 		outputs = self.encoder(embed, mask=src_mask)
 		return outputs
