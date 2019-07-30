@@ -5,6 +5,7 @@ import random
 import configs
 from operator import itemgetter
 import collections
+import tqdm
 
 
 def parseInput(sent):
@@ -58,10 +59,6 @@ def getVocabForAST(asts, vocab_size):
 			if "type" in node.keys():
 				counts[node["type"]] = counts.get(node["type"], 0) + 1
 				vocab.update([node["type"]])
-		# code2seq中path不包括value
-		# 	if "value" in node.keys():
-		# 	    counts[node["value"]] = counts.get(node["value"], 0) + 1
-		# 	    vocab.update([node["value"]])
 
 	_sorted = sorted(vocab, reverse=True, key=lambda x: counts[x])
 	for i, word in enumerate(["<PAD>", "<UNK>", "<START>", "<STOP>"] + _sorted):
@@ -141,9 +138,8 @@ def str2list(ast):
 	return sorted(nodes, key=getIndex)
 
 
+import ASTutils_v2
 def getVocab():
-	# 获得几种特征的词表
-	# ast是json格式 n是需要抽取的路径数
 	connect = pymysql.Connect(
 		host="10.131.252.198",
 		port=3306,
@@ -154,21 +150,22 @@ def getVocab():
 	)
 
 	cursor = connect.cursor()
-	sql = "SELECT id, methName, tokens, comments, newapiseq FROM reposfile"
-	# sql = "SELECT tokens FROM reposfile_new"
+	sql = "SELECT id, methname, tokens, apiseq, ast FROM reposfile"
 	cursor.execute(sql)
 	data = cursor.fetchall()
+
 
 	asts = []
 	methNames = []
 	tokens = []
 	descs = []
 	apiseqs = []
-	newapiseq = []
 
-	# todo: 绑定id
+	for line in open('desc.txt', 'r').readlines():
+		line = line.strip().split()
+		descs.append(' '.join(line[1:]))
 	ids = []
-	for i in range(len(data)):
+	for i in tqdm.tqdm(range(len(data))):
 		ids.append(int(data[i][0]))
 
 		methName = str(data[i][1])
@@ -177,32 +174,29 @@ def getVocab():
 		token = str(data[i][2])
 		tokens.append(token)
 
-		desc = str(data[i][3])
-		descs.append(desc)
+		# desc = str(data[i][3])
+		# descs.append(desc)
 
-		apiseq = str(data[i][4])
+		apiseq = str(data[i][3])
 		apiseqs.append(apiseq)
 
-		# tokens.append(str(data[i][0]))
-		# ast = str(data[i][1])
-		# 这一步替换注
-		# ast = str2list(ast)
-		# asts.append(ast)
+		ast = str(data[i][4])
+		asts.append(ast)
+
 	length = len(data)
-	del data
 	cf = configs.conf()
 	print(length)
 
-	methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, cf.n_words)
-	token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, cf.n_words)
-	desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, cf.n_words)
-	apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, cf.n_words)  # api词表大小和其他的不一样
+	methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, 20000)
+	token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, 50000)
+	desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, 30000)
+	apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, 30000)
 	# import pickle
 	# methName_vocab_to_int = pickle.load(open(cf.data_dir + cf.vocab_methname, 'rb'))
 	# token_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_tokens, 'rb')))
 	# desc_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_desc, 'rb')))
 	# apiseqnew_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_apiseq, 'rb')))
-	# 以上这些特征可以转为编号后重新写入数据库
+
 	methNamesNum = []
 	for methName in methNames:
 		methNamesNum.append(toNum(methName, methName_vocab_to_int))
@@ -218,25 +212,51 @@ def getVocab():
 	apiseqsNum = []
 	for apiseq in apiseqs:
 		apiseqsNum.append(toNum(apiseq, apiseq_vocab_to_int))
-
-
+	#
+	#
 	assert len(methNamesNum) == len(tokensNum) == len(descsNum) == len(apiseqsNum)
-	sql = "insert INTO repos_index values (%s,%s,%s,%s,%s)"
-	failed = 0
-	for i in range(length):
-		m, t, d, a = list2int(methNamesNum[i]), list2int(tokensNum[i]), list2int(descsNum[i]),  list2int(apiseqsNum[i])
-		try:
-			cursor.execute(sql, (ids[i], m, t, d, a))
-		except Exception as e:
-			print(e)
-			print("insert failed")
-			failed += 1
-	cursor.close()
-	connect.commit()
-	connect.close()
-	print("insert failed number is: %d" % failed)
+	onlyindex = []
+	onlyvalid = []
 
-	# ast_vocab_to_int = getVocabForAST(asts, cf.n_words-1)
+	dic = set()
+	while len(dic) < 10000:
+		dic.add(random.randrange(0, len(methNamesNum)))
+
+	fast = open("astindex.txt", 'w')
+	fvalid = open("astvalid.txt", 'w')
+	for i in tqdm.tqdm(range(length)):
+		data = [list2int(methNamesNum[i]), list2int(tokensNum[i]), list2int(descsNum[i]), list2int(apiseqsNum[i])]
+		ast = ASTutils_v2.getindex(asts[i], token_vocab_to_int)
+		astdata = data + ast
+		if i not in dic:
+			onlyindex.append(data)
+			fast.write(json.dumps(astdata) + '\n')
+		else:
+			onlyvalid.append(data)
+			fvalid.write(json.dumps(astdata) + '\n')
+
+	dic = [i for i in dic]
+	json.dump(onlyindex, open('onlyindex.json', 'w'))
+	json.dump(onlyvalid, open('onlyvalid.json', 'w'))
+	json.dump(dic, open('ids.json', 'w'))
+
+	# sql = "insert INTO repos_index2 values (%s,%s,%s,%s,%s)"
+	# failed = 0
+	# for i in range(length):
+	# 	m, t, d, a = list2int(methNamesNum[i]), list2int(tokensNum[i]), list2int(descsNum[i]),  list2int(apiseqsNum[i])
+	# 	try:
+	# 		cursor.execute(sql, (ids[i], m, t, d, a))
+	# 	except Exception as e:
+	# 		print(e)
+	# 		print("insert failed")
+	# 		failed += 1
+	# cursor.close()
+	# connect.commit()
+	# connect.close()
+	# print("insert failed number is: %d" % failed)
+
+
+	# ast_vocab_to_int = getVocabForAST(asts, 100)
 	#
 	# # ast的词表保存在本地
 	# save_vocab("vocab_ast.json", ast_vocab_to_int)

@@ -1,3 +1,4 @@
+import copy
 import random
 import json
 
@@ -33,11 +34,11 @@ def astToNum(data, vocab_to_int):
 	# 转为编号表示
 	res = []
 
-	if len(data) < 9:
-		for i in range(9 - len(data)):
+	if len(data) < 7:
+		for i in range(7 - len(data)):
 			data.append("<PAD>")
-	elif len(data) > 9:
-		data = data[:9]
+	elif len(data) > 7:
+		data = data[:7]
 
 	for z in (data):
 		res.append(vocab_to_int.get(z, vocab_to_int["<UNK>"]))
@@ -48,14 +49,10 @@ def astToNum(data, vocab_to_int):
 def dfsSimplify(ast, root, path, totalpath):
 	# 深度遍历 得到多条路径
 	if "children" in ast[root["index"]].keys():
-		if len(ast[root["index"]]["children"]) >= 1:
-			path.append(root["type"])
-			for child in root["children"]:
-				dfsSimplify(ast, ast[child], path, totalpath)
-			path.pop()
-		else:
-			# 只有一个子节点 略过
-			dfsSimplify(ast, ast[root["children"][0]], path, totalpath)
+		path.append(root["type"])
+		for child in root["children"]:
+			dfsSimplify(ast, ast[child], path, totalpath)
+		path.pop()
 	else:
 		# todo
 		if root["value"] == None:
@@ -63,20 +60,24 @@ def dfsSimplify(ast, root, path, totalpath):
 		path.append(root["value"])
 		# 叶节点内容包含在path中
 		totalpath.append(' '.join(path))
+		if len(totalpath) > 200:
+			return
+		path.pop()
 		return
 
 
-def getNPathSimplify(ast, n):
+def getNPathSimplify(ast):
 	# 随机得到n条路径
 	path = []
 	totalpath = []
 	dfsSimplify(ast, ast[0], path, totalpath)
 	nPath = []
+	n = len(totalpath)
 	for i in range(n):
-		a = random.randint(0, len(totalpath) - 1)
-		b = random.randint(0, len(totalpath) - 1)
-		sent = ' '.join(reversed(totalpath[a].split(' ')[1:])) + ' ' + totalpath[b]
-		nPath.append(sent)
+		for j in range(i + 1, n):
+			sent = ' '.join(reversed(totalpath[i].split(' ')[1:])) + ' ' + totalpath[j]
+			nPath.append(sent)
+
 	return nPath
 
 
@@ -118,15 +119,16 @@ def splitToken(token):
 			start = end
 		else:
 			break
+
 	return subtokens
 
 
 def subtokenToNum(data, vocab_to_int):
-	if len(data) < 5:
-		for i in range(5 - len(data)):
+	if len(data) < 3:
+		for i in range(3 - len(data)):
 			data.append("<PAD>")
-	elif len(data) > 5:
-		data = data[:5]
+	elif len(data) > 3:
+		data = data[:3]
 	res = []
 	for z in data:
 		res.append(vocab_to_int.get(z, 1))
@@ -168,71 +170,110 @@ def updateVocab(vocab):
 
 	return vocab
 
+conn = pymysql.Connect(
+			host="10.131.252.198",
+			port=3306,
+			user="root",
+			passwd="17210240114",
+			db="repos",
+			charset='utf8'
+		)
+cursor = conn.cursor()
 
-from tqdm import tqdm
-pre = "public class test%d {\n %s \n}"
-with open("E:\\methods.json", 'r', encoding='utf-8') as f:
-	for row in tqdm(f.readlines()):
-		try:
-			js = json.loads(row)
-			# cont = ";\n".join(row[1].split(";"))
-			cont = js["method"]
-			id = js["mid"]
-			code = pre % (id, cont)
-			filenmae = "d:\\code2\\" + str(id) + ".java"
-			with open(filenmae, 'w') as o:
-				o.write(code)
-				o.close()
-		except Exception as e:
-			print(e)
+
+
+# sql = "select reponame from repos_deal"
+# set = set()
+# cursor.execute(sql)
+# for row in cursor.fetchall():
+# 	set.add(row[0])
+# with open("addrlist.txt") as f:
+# 	for line in f.readlines():
+# 		temp = line.strip().split("/")
+# 		name = temp[-2] + "$$%" + temp[-1]
+# 		set.add(name)
+#
+# addr = []
+# data = json.load(open("response.json"))
+# for id in data["data"]:
+# 	temp = id["local_addr"].split("/")
+# 	name = temp[-2] + "$$%" + temp[-1]
+# 	if name not in set:
+# 		addr.append(id["local_addr"] + "\n")
+# print(len(addr))
+# with open("addrlist.txt", "w") as f:
+# 	f.writelines(addr)
+
+
+
+# pre = "public class test%d {\n %s \n}"
+# rs = []
+# count = 0
+# temp = []
+# guolv = set()
+# with open("C:\\Users\\loading\\Desktop\\SAGA-GPU-fragment\\type12_frag_result.csv", 'r', encoding='utf-8') as f:
+# 	for row in tqdm(f.readlines()):
+# 		if row == "\n":
+# 			rs.append(count)
+# 			rs.append(copy.copy(temp))
+# 			count = 0
+# 			temp.clear()
+# 			guolv.clear()
+# 		else:
+# 			if row.split(',')[1] not in guolv:
+# 				count += 1
+# 				temp.append(row)
+# 				guolv.add(row.split(',')[1])
+# 	f.close()
+# with open("D:\\result2.csv", "w") as f:
+# 	for row in tqdm(rs):
+# 		if type(row) == list:
+# 			f.writelines(row)
+# 		else:
+# 			f.write(str(row) + '\n')
+# 	f.close()
 
 # print(pre % (1, "public void register(Job job){   jobs.add(job); } "))
 
-# ast_vocab_to_int = json.load(open("vocab_ast.json", 'r'))
-# tokens_vocab_to_int = json.load(open("vocab_tokens.json", 'r'))
-#
-# tokens_vocab_to_int = updateVocab(tokens_vocab_to_int)
-#
-# sql = "select id, ast from reposfile where id = 3527218"
-# sql2 = " update repos_index set astindex = %s, firstindex = %s, lastindex = %s where id = %s "
-# cursor.execute(sql)
-# conn.commit()
-# data = cursor.fetchall()
-#
-# for row in data:
-# 	npath = getNPathSimplify(json.loads(row[1]), 220)
-# 	npaths = []
-# 	nfirst = []
-# 	nlast = []
-# 	for path in npath:
-# 		path = parseInput(path)
-# 		nfirst.append(subtokenToNum(splitToken(path[0]), tokens_vocab_to_int))
-# 		nlast.append(subtokenToNum(splitToken(path[-1]), tokens_vocab_to_int))
-# 		npaths.append(astToNum(path[1:-1], ast_vocab_to_int))
-# 	cursor.execute(sql2, (json.dumps(npaths), json.dumps(nfirst), json.dumps(nlast), row[0]))
-# 	conn.commit()
+
+def getAstVocab():
+	ast_vocab_to_int = json.load(open("vocab_ast.json", 'r'))
+	tokens_vocab_to_int = json.load(open("vocab_tokens.json", 'r'))
+	tokens_vocab_to_int = updateVocab(tokens_vocab_to_int)
+	import tqdm
+	sql = "select id, ast from reposfile where id < 1000"
+	cursor.execute(sql)
+	conn.commit()
+	data = cursor.fetchall()
+	with open("astindex.json", "w")as f:
+		for row in tqdm.tqdm(data):
+			rs = []
+			npath = getNPathSimplify(json.loads(row[1]))
+			npaths = []
+			nfirst = []
+			nlast = []
+			for path in npath:
+				path = path.split(' ')
+				nfirst.append(subtokenToNum(splitToken(path[0]), tokens_vocab_to_int))
+				nlast.append(subtokenToNum(splitToken(path[-1]), tokens_vocab_to_int))
+				npaths.append(astToNum(path[1:-1], ast_vocab_to_int))
+				rs.append([nfirst, nlast, npaths])
+			del row
+			f.write(json.dumps(rs))
+		f.close()
+
+
+# def getRandom():
+# 	dic = json.load(open("ids.json", 'r'))
+# 	data = json.load(open('index.json', 'r'))
+# 	with open('test.txt', 'r') as f:
+# 		for id, line in enumerate(f.readlines()):
+			
+
+getRandom()
 
 # tokens_vocab_to_int = updateVocab(tokens_vocab_to_int)
 # idindex = json.load(open('idlist.txt', 'r'))
-
-# idindex = []
-# sql = "select id, astindex from repos_index"
-# sql2 = "update repos_index set astindex = %s where id = %s "
-# cursor.execute(sql)
-# conn.commit()
-# data = cursor.fetchall()
-# for row in data:
-# 	if row[1]:
-# 		ast = json.loads(row[1])
-# 		for path in ast:
-# 			if len(path) != 9:
-# 				idindex.append(row[0])
-# 				break
-# 	else:
-# 		idindex.append(row[0])
-# 	print(row[0])
-# json.dump(idindex, open('idindex.txt', 'w'))
-
 # idlist = []
 # sql = "select id, astindex from repos_index"
 # cursor.execute(sql)
@@ -252,6 +293,8 @@ with open("E:\\methods.json", 'r', encoding='utf-8') as f:
 # print(len(idlist))
 # with open('idlist.txt', 'w') as f:
 # 	json.dump(idlist, f)
+
+
 
 # clones = {}
 # with open("C:\\Users\\loading\\Desktop\\SAGA-GPU-fragment\\new_result.csv", 'r') as f:
@@ -277,6 +320,8 @@ with open("E:\\methods.json", 'r', encoding='utf-8') as f:
 # 			f.write(str(dub))
 # 			f.write('\n')
 # 	f.close()
+
+
 
 # import numpy as np
 # import matplotlib.pyplot as plt

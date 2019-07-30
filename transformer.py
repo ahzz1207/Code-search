@@ -20,7 +20,7 @@ class Embedding(Layer):
 	def call(self, inputs):
 		embdding = self.embdding(inputs)
 		# embdding = tf.nn.embedding_lookup(self.lookup, inputs)
-		embdding = embdding * self.scale
+		embdding = embdding / self.scale
 
 		return embdding
 
@@ -234,8 +234,8 @@ class EncoderModel(Layer):
 
 		pad_mask, src_mask = getMask(inputs)
 		pad_mask = tf.tile(tf.expand_dims(pad_mask, axis=2), [1, 1, self.embed_dim])
-		zero = tf.zeros([128] + list(embed.shape[1:]))
-		embed = tf.where(tf.equal(pad_mask, False), zero, embed)
+		# zero = tf.zeros([128] + list(embed.shape[1:]))
+		# embed = tf.where(tf.equal(pad_mask, False), zero, embed)
 		embed = tf.nn.dropout(embed, rate=0.1)
 		outputs = self.encoder(embed, mask=src_mask)
 		return outputs

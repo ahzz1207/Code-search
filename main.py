@@ -392,7 +392,7 @@ class CodeSearcher:
 if __name__ == '__main__':
 	conf = configs.conf()
 	codesearcher = CodeSearcher(conf)
-	mode = 'search'
+	mode = 'eval'
 
 	#  Define model
 	model = eval(conf.model_name)(conf)
@@ -408,7 +408,7 @@ if __name__ == '__main__':
 		if conf.reload > 0:
 			codesearcher.load_model_epoch(model, conf.reload)
 		# acc, mrr = codesearcher.valid(model, 2000, 10)
-		acc, mrr, map, ndcg = codesearcher.eval(model, -1, 10)
+		acc, mrr, map, ndcg = codesearcher.eval(model, 2000, 10)
 		print("Eval result is :")
 		print(acc, mrr, map, ndcg)
 
