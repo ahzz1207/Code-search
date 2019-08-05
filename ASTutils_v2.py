@@ -329,8 +329,8 @@ def getindex(ast, tokens_vocab_to_int):
 			break
 	for i in range(len(path)):
 		rspath.append(astToNum(path_copy[i], ast_vocab_to_int))
-		rsf.append(tokens_vocab_to_int.get(ftoken[i], 1))
-		rsl.append(tokens_vocab_to_int.get(ltoken[i], 1))
+		rsf.append(subtokenToNum(splitToken(ftoken[i]), tokens_vocab_to_int))
+		rsl.append(subtokenToNum(splitToken(ftoken[i]), tokens_vocab_to_int))
 	return [rspath, rsf, rsl]
 
 # 	npath = getNPathSimplify(ast) # 拿到所有路径

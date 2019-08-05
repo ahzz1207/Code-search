@@ -9,6 +9,7 @@ import tables
 import configs
 import codecs
 import numpy as np
+import redis
 import random
 from scipy.stats import rankdata
 import math
@@ -17,6 +18,7 @@ import threading
 from utils import normalize, cos_np_for_normalized, cos_np
 from models import *
 import os
+import json
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 class CodeSearcher:
@@ -27,7 +29,8 @@ class CodeSearcher:
 		self.vocab_apiseq = self.load_pickle(self.path + self.conf.vocab_apiseq)
 		self.vocab_tokens = self.load_pickle(self.path + self.conf.vocab_tokens)
 		self.vocab_desc = self.load_pickle(self.path + self.conf.vocab_desc)
-
+		self.r = redis.Redis(charset='utf-8')
+		self.data_lenth = self.r.llen("onlyindex")
 		self.code_base = None
 		self.code_base_chunksize = 1000000
 		self.code_reprs = None
@@ -56,26 +59,28 @@ class CodeSearcher:
 		table.close()
 		return sents
 
-	def load_txt_data(self, file, start_offset, chunk_size):
-		with open(file, 'r') as f:
-			lines = f.readlines()
-			data_len = len(lines)
-			if chunk_size == -1:  # load all data
-				chunk_size = data_len
-			start_offset = start_offset % data_len
-			offset = start_offset
-			sents = []
-			while offset < start_offset + chunk_size:
-				if offset >= data_len:
-					chunk_size = start_offset + chunk_size - data_len
-					start_offset = 0
-					offset = 0
-				sent = [int(x, base=10) for x in lines[offset].rstrip().split(' ')]
-				offset += 1
-				sents.append(sent)
-		return sents
+	def load_train_data(self, start_offset, chunk_size, db):
+		chunk_methnames = []
+		chunk_descs = []
+		chunk_tokens = []
+		chunk_apiseq = []
+		start_offset = start_offset % self.data_lenth
 
-	def load_train_data(self, offset, chunk_size):
+		if start_offset + chunk_size > self.data_lenth:
+			data = self.r.lrange(db, 0, chunk_size-1)
+		else:
+			data = self.r.lrange(db, start_offset, start_offset + chunk_size-1)
+
+		for row in data:
+			row = json.loads(row)
+			chunk_methnames.append(np.array([int(x, base=10) for x in row[0].strip().split(' ')]))
+			chunk_tokens.append(np.array([int(x, base=10) for x in row[1].strip().split(' ')]))
+			chunk_descs.append(np.array([int(x, base=10) for x in row[2].strip().split(' ')]))
+			chunk_apiseq.append(np.array([int(x, base=10) for x in row[3].strip().split(' ')]))
+		del data
+		return chunk_methnames, chunk_apiseq, chunk_tokens, chunk_descs
+
+	def load_train_data2(self, offset, chunk_size):
 		chunk_methnames = self.load_hdf5(self.path + self.conf.train_methodname, offset, chunk_size)
 		chunk_apiseq = self.load_hdf5(self.path + self.conf.train_apiseq, offset, chunk_size)
 		chunk_tokens = self.load_hdf5(self.path + self.conf.train_tokens, offset, chunk_size)
@@ -138,20 +143,17 @@ class CodeSearcher:
 		return pad_sequences(data, maxlen=len, padding='post', truncating='post', value=0)
 
 	def save_model_epoch(self, model, epoch):
-		if not os.path.exists(self.path + 'models3/new2/' + self.conf.model_name + '/'):
-			os.makedirs(self.path + 'models3/new2/' + self.conf.model_name + '/')
+		if not os.path.exists(self.path + 'models4/newindex/' + self.conf.model_name + '/'):
+			os.makedirs(self.path + 'models4/newindex/' + self.conf.model_name + '/')
 
-		model.save("{}models3/new2/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models3/new2/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
+		model.save("{}models4/newindex/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models4/newindex/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
 		           overwrite=True)
 
 	def load_model_epoch(self, model, epoch):
-		assert os.path.exists(
-			"{}models2/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
-			, "Weights at epoch {:d} not found".format(epoch)
 
-		model.load("{}models2/new/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models2/new/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
+		model.load("{}models4/newindex/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models4/newindex/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
 		print("Load model %epoch" % epoch)
 
 
@@ -169,7 +171,7 @@ class CodeSearcher:
 		for i in range(self.conf.reload, nb_epoch):
 			print('Epoch %d' % i, end=' ')
 			chunk_methnames, chunk_apiseqs, chunk_tokens, chunk_descs = self.load_train_data(
-				i * self.conf.chunk_size, self.conf.chunk_size)
+				i * self.conf.chunk_size, self.conf.chunk_size, 'onlyindex')
 			chunk_padded_methnames = self.pad(chunk_methnames, self.conf.methname_len)
 			chunk_padded_apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
 			chunk_padded_tokens = self.pad(chunk_tokens, self.conf.tokens_len)
@@ -289,22 +291,17 @@ class CodeSearcher:
 			return idcg
 
 		# load valid dataset
-		if self._eval_sets is None:
-			methnames, apiseqs, tokens, descs = self.load_valid_data(poolsize)
-			self._eval_sets = dict()
-			self._eval_sets['methnames'] = methnames
-			self._eval_sets['apiseqs'] = apiseqs
-			self._eval_sets['tokens'] = tokens
-			self._eval_sets['descs'] = descs
+		chunk_methnames, chunk_apiseqs, chunk_tokens, chunk_descs = self.load_train_data(
+			0, poolsize, 'onlyvalid')
 		acc, mrr, map, ndcg = 0, 0, 0, 0
-		data_len = len(self._eval_sets['descs'])
+		data_len = len(chunk_methnames)
 		print("Eval dataSet length %d" % data_len)
 		for i in range(data_len):
-			desc = self._eval_sets['descs'][i]  # good desc
+			desc = chunk_descs[i]  # good desc
 			descs = self.pad([desc] * data_len, self.conf.desc_len)
-			methnames = self.pad(self._eval_sets['methnames'], self.conf.methname_len)
-			apiseqs = self.pad(self._eval_sets['apiseqs'], self.conf.apiseq_len)
-			tokens = self.pad(self._eval_sets['tokens'], self.conf.tokens_len)
+			methnames = self.pad(chunk_methnames, self.conf.methname_len)
+			apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
+			tokens = self.pad(chunk_tokens, self.conf.tokens_len)
 			n_results = K
 			sims = model.predict([methnames, apiseqs, tokens, descs], batch_size=data_len).flatten()
 			negsims = np.negative(sims)

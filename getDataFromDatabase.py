@@ -187,15 +187,19 @@ def getVocab():
 	cf = configs.conf()
 	print(length)
 
-	methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, 20000)
-	token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, 50000)
-	desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, 30000)
-	apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, 30000)
+	# methName_vocab_to_int, methName_int_to_vocab = getVocabForOther(methNames, 20000)
+	# token_vocab_to_int, token_int_to_vocab = getVocabForOther(tokens, 50000)
+	# desc_vocab_to_int, desc_int_to_vocab = getVocabForOther(descs, 30000)
+	# apiseq_vocab_to_int, apiseq_int_to_vocab = getVocabForOther(apiseqs, 20000)
 	# import pickle
 	# methName_vocab_to_int = pickle.load(open(cf.data_dir + cf.vocab_methname, 'rb'))
 	# token_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_tokens, 'rb')))
 	# desc_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_desc, 'rb')))
 	# apiseqnew_vocab_to_int = pickle.load((open(cf.data_dir + cf.vocab_apiseq, 'rb')))
+	methName_vocab_to_int = json.load(open('vocab_methname.json', 'r'))
+	token_vocab_to_int = json.load(open('vocab_tokens.json', 'r'))
+	desc_vocab_to_int = json.load(open('vocab_desc.json', 'r'))
+	apiseq_vocab_to_int = json.load(open('vocab_apiseq.json', 'r'))
 
 	methNamesNum = []
 	for methName in methNames:
@@ -224,6 +228,7 @@ def getVocab():
 
 	fast = open("astindex.txt", 'w')
 	fvalid = open("astvalid.txt", 'w')
+
 	for i in tqdm.tqdm(range(length)):
 		data = [list2int(methNamesNum[i]), list2int(tokensNum[i]), list2int(descsNum[i]), list2int(apiseqsNum[i])]
 		ast = ASTutils_v2.getindex(asts[i], token_vocab_to_int)

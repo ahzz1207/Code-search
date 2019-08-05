@@ -155,19 +155,19 @@ class JointEmbeddingModel:
 		# backward rnn
 		bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_apiseq_bw')
 
-		# apiseq_fw = fw_rnn(apiseq_dropout)
-		# apiseq_bw = bw_rnn(apiseq_dropout)
-		#
-		# dropout = Dropout(0.25, name='dropout_apiseq_rnn')
-		# apiseq_fw_dropout = dropout(apiseq_fw)
-		# apiseq_bw_dropout = dropout(apiseq_bw)
+		apiseq_fw = fw_rnn(apiseq_dropout)
+		apiseq_bw = bw_rnn(apiseq_dropout)
+
+		dropout = Dropout(0.25, name='dropout_apiseq_rnn')
+		apiseq_fw_dropout = dropout(apiseq_fw)
+		apiseq_bw_dropout = dropout(apiseq_bw)
 
 		# max pooling
 
 		maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
 		                 name='maxpooling_apiseq')
-		# apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
-		apiseq_pool = maxpool(apiseq_dropout)
+		apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
+		# apiseq_pool = maxpool(apiseq_dropout)
 		activation = Activation('tanh', name='active_apiseq')
 		apiseq_repr = activation(apiseq_pool)
 

@@ -27,8 +27,10 @@ class conf:
 		self.apiseq_len = 30
 		self.tokens_len = 50
 		self.desc_len = 30
-		self.n_words = 10000  # the size of vocab
-
+		self.methname_words = 20000
+		self.desc_words = 30000
+		self.tokens_words = 50000  # the size of vocab
+		self.api_words = 30000  # api词表大小
 		# vocab_methname
 		self.vocab_methname = 'vocab.methname.pkl'
 		self.vocab_apiseq = 'vocab.apiseq.pkl'
@@ -39,14 +41,14 @@ class conf:
 		self.model_name = 'JointEmbeddingModel'
 		self.valid_batch_size = 2000
 		self.batch_size = 128
-		self.chunk_size = 240000  ## load all data
+		self.chunk_size = 128000  ## load all data
 		self.nb_epoch = 201
 		self.validation_split = 0.2
 		self.optimizer = 'adam'  ##学习率默认0.01
 		self.valid_every = None
 		self.n_eval = 100
 		self.save_every = 20
-		self.reload = 100
+		self.reload = 160
 
 		self.embed_dims = 100
 		self.hidden_dims = 400

@@ -15,7 +15,7 @@ import traceback
 import threading
 from utils import normalize, cos_np_for_normalized
 # from models_notoken import *
-from model_transformer import *
+from model_transformer_bilstm import *
 import pymysql
 import json
 import numpy as np
@@ -39,29 +39,19 @@ class CodeSearcher:
 		return pickle.load(open(filename, 'rb'))
 
 
-	def get_dataset2(self):
+	def get_dataset(self):
 		self.r = redis.Redis(charset='utf-8')
 
-		self.data_len = self.r.llen('index')
+		self.data_len = self.r.llen('astindex')
 
 		print("All index init succes, it's length ：%d" % self.data_len)
 
 	def get_valid_dataset(self):
-		self.methname = []
-		self.desc = []
-		self.astpath = []
-		self.firstindex = []
-		self.lastindex = []
-		self.data_len = 10000
-		self.conn = pymysql.Connect(
-			host="10.131.252.198",
-			port=3306,
-			user="root",
-			passwd="17210240114",
-			db="repos",
-			charset='utf8'
-		)
-		self.cursor = self.conn.cursor()
+		self.r = redis.Redis(charset='utf-8')
+
+		self.data_len = self.r.llen('astvalid')
+
+		print("All index init succes, it's length ：%d" % self.data_len)
 
 
 	def load_hdf5(self, file, start_offset, chunk_size):
@@ -85,39 +75,35 @@ class CodeSearcher:
 		return sents
 
 
-	def load_train_data3(self, start_offset, chunk_size, train=True):
+	def load_train_data(self, start_offset, chunk_size, db):
 		chunk_methnames = []
 		chunk_descs = []
 		chunk_asts = []
+		chunk_tokens = []
+		chunk_apiseq = []
 		chunk_first = []
 		chunk_last = []
-
 		start_offset = start_offset % self.data_len
 
-		if train:
-			if start_offset + chunk_size > self.data_len:
-				data = self.r.lrange("index", 0, chunk_size-1)
-			else:
-				data = self.r.lrange("index", start_offset, start_offset + chunk_size-1)
+		if start_offset + chunk_size > self.data_len:
+			data = self.r.lrange(db, 0, chunk_size-1)
 		else:
-			sql = "select methindex, descindex, astindex, firstindex, lastindex from repos_valid order by rand()"
-			self.cursor.execute(sql)
-			data = self.cursor.fetchmany(chunk_size)
+			data = self.r.lrange(db, start_offset, start_offset + chunk_size-1)
 
 		for row in data:
-			if train:
-				row = json.loads(row)
+			row = json.loads(row)
 			chunk_methnames.append(np.array([int(x, base=10) for x in row[0].strip().split(' ')]))
-			chunk_descs.append(np.array([int(x, base=10) for x in row[1].strip().split(' ')]))
-			chunk_asts.append(json.loads(row[2], object_hook='list'))
-			chunk_first.append(json.loads(row[3], object_hook='list'))
-			chunk_last.append(json.loads(row[4], object_hook='list'))
-
-		chunk_padded_first = np.asarray(chunk_first)
+			chunk_tokens.append(np.array([int(x, base=10) for x in row[1].strip().split(' ')]))
+			chunk_descs.append(np.array([int(x, base=10) for x in row[2].strip().split(' ')]))
+			chunk_apiseq.append(np.array([int(x, base=10) for x in row[3].strip().split(' ')]))
+			chunk_asts.append(row[4][:100])
+			chunk_first.append(row[5][:100])
+			chunk_last.append(row[6][:100])
 		chunk_padded_astspaths = np.asarray(chunk_asts)
+		chunk_padded_first = np.asarray(chunk_first)
 		chunk_padded_last = np.asarray(chunk_last)
-		del data, chunk_first, chunk_asts, chunk_last
-		return chunk_methnames, chunk_descs, chunk_padded_astspaths, chunk_padded_first, chunk_padded_last
+		del data
+		return chunk_methnames, chunk_descs, chunk_apiseq, chunk_padded_astspaths, chunk_padded_first, chunk_padded_last
 
 
 	def load_valid_data(self, chunk_size):
@@ -176,25 +162,25 @@ class CodeSearcher:
 		return pad_sequences(data, maxlen=len, padding='post', truncating='post', value=0)
 
 	def save_model_epoch(self, model, epoch):
-		if not os.path.exists(self.path + 'modelsE/' + self.conf.model_name + '/'):
-			os.makedirs(self.path + 'modelsE/' + self.conf.model_name + '/')
+		if not os.path.exists(self.path + 'models-notoken/' + self.conf.model_name + '/'):
+			os.makedirs(self.path + 'models-notoken/' + self.conf.model_name + '/')
 
-		model.save("{}modelsE/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}modelsE/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
+		model.save("{}models-notoken/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models-notoken/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
 		           overwrite=True)
 
 	def load_model_epoch(self, model, epoch):
 		assert os.path.exists(
-			"{}modelsE/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
+			"{}models-notoken/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
 			, "Weights at epoch {:d} not found".format(epoch)
 
-		model.load("{}modelsE/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}modelsE/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
+		model.load("{}models-notoken/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models-notoken/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
 		print("Load model %epoch" % epoch)
 
 
 	def train(self, model):
-		codesearcher.get_dataset2()
+		codesearcher.get_dataset()
 		if self.conf.reload > 0:
 			self.load_model_epoch(model, self.conf.reload)
 		valid_every = self.conf.valid_every
@@ -203,35 +189,20 @@ class CodeSearcher:
 		nb_epoch = self.conf.nb_epoch
 		split = self.conf.validation_split
 		val_loss = {'loss': 1., 'epoch': 0}
-		sql = "select methindex, tokens, descindex, apiseq, astindex, firstindex, lastindex from repos_index where id > %s and id <= %s order by rand()"
 
 		for i in range(self.conf.reload, nb_epoch):
 			print('Epoch %d' % i, end=' ')
-			chunk_methnames, chunk_descs, chunk_asts, chunk_first, chunk_last \
-				= self.load_train_data3(i * self.conf.chunk_size, self.conf.chunk_size)
+			chunk_methnames, chunk_descs, chunk_apiseq, chunk_asts, chunk_first, chunk_last \
+				= self.load_train_data(i * self.conf.chunk_size, self.conf.chunk_size, 'astindex')
 
 			chunk_padded_methnames = self.pad(chunk_methnames, self.conf.methname_len)
-
-			# for z in range(self.conf.path_num):
-			# 	chunk_path = []
-			# 	chunk_f = []
-			# 	chunk_l = []
-			# 	for j in range(len(chunk_asts)):  # 一个epoch数据量
-			# 		if j not in index:
-			# 			chunk_path.append(chunk_asts[j][z])
-			# 			chunk_f.append(chunk_first[j][z])
-			# 			chunk_l.append(chunk_last[j][z])
-			# 	chunk_padded_astspaths.append(np.array(chunk_path))
-			# 	chunk_padded_first.append(np.array(chunk_f))
-			# 	chunk_padded_last.append(np.array(chunk_l))
-
 			chunk_padded_good_descs = self.pad(chunk_descs, self.conf.desc_len)
+			chunk_padded_apiseq = self.pad(chunk_apiseq, self.conf.apiseq_len)
 			chunk_bad_descs = [desc for desc in chunk_descs]
 			random.shuffle(chunk_bad_descs)
 			chunk_padded_bad_descs = self.pad(chunk_bad_descs, self.conf.desc_len)
 
-			# inputs = [chunk_padded_methnames, chunk_padded_apiseqs, chunk_padded_tokens]+chunk_padded_astspaths+chunk_first+chunk_last+[chunk_padded_good_descs, chunk_padded_bad_descs]
-			inputs = [chunk_padded_methnames, chunk_asts, chunk_first, chunk_last, chunk_padded_good_descs, chunk_padded_bad_descs]
+			inputs = [chunk_padded_methnames, chunk_padded_apiseq, chunk_asts, chunk_first, chunk_last, chunk_padded_good_descs, chunk_padded_bad_descs]
 			hist = model.fit(x=inputs, epochs=1, batch_size=batch_size, validation_split=split, shuffle=True)
 
 			if hist.history['val_loss'][0] < val_loss['loss']:
@@ -240,9 +211,6 @@ class CodeSearcher:
 			elif i % save_every == 0:
 				self.save_model_epoch(model, i)
 			print('Best: Loss = {}, Epoch = {}'.format(val_loss['loss'], val_loss['epoch']))
-			# if valid_every is not None and i % valid_every == 0:
-			# 	acc1, mrr = self.valid(model, 1000, 1)
-			# 	print(acc1, mrr)
 
 
 	def valid(self, model, poolsize, K):
@@ -332,7 +300,8 @@ class CodeSearcher:
 		self.get_valid_dataset()
 		acc, mrr, map, ndcg = 0, 0, 0, 0
 		batch_size = self.conf.valid_batch_size
-		chunk_methnames, chunk_descs, chunk_asts, chunk_first, chunk_last = self.load_train_data3(0, poolsize, False)
+		chunk_methnames, chunk_descs, chunk_apiseq, chunk_asts, chunk_first, chunk_last \
+			= self.load_train_data(0, poolsize, 'astvalid')
 		data_len = len(chunk_methnames)
 		print("Eval dataSet length %d" % data_len, batch_size)
 		for i in range(data_len):
@@ -341,14 +310,15 @@ class CodeSearcher:
 			descs = self.pad([desc] * data_len, self.conf.desc_len)
 			methnames = self.pad(chunk_methnames, self.conf.methname_len)
 			# tokens = self.pad(chunk_tokens, self.conf.tokens_len)
-			# apiseqs = self.pad(chunk_apiseqs, self.conf.apiseq_len)
+			apiseqs = self.pad(chunk_apiseq, self.conf.apiseq_len)
 
 			n_results = K
 			sims = []
+			loss = []
 			for j in range(data_len // batch_size):
-				inputs = [methnames[j*batch_size: (j+1)*batch_size], chunk_asts[j*batch_size: (j+1)*batch_size],
-				          chunk_first[j*batch_size: (j+1)*batch_size], chunk_last[j*batch_size: (j+1)*batch_size],
-				          descs[j*batch_size: (j+1)*batch_size]]
+				inputs = [methnames[j*batch_size: (j+1)*batch_size], apiseqs[j*batch_size: (j+1)*batch_size],
+				          chunk_asts[j*batch_size: (j+1)*batch_size], chunk_first[j*batch_size: (j+1)*batch_size],
+				          chunk_last[j*batch_size: (j+1)*batch_size], descs[j*batch_size: (j+1)*batch_size]]
 
 				sim = model.predict(x=inputs, batch_size=batch_size)
 
@@ -365,7 +335,9 @@ class CodeSearcher:
 				# 	sims.append(0.5 + 0.5 * cos[i][0])
 				for x in sim:
 					sims.append(x)
+
 			# inputs = [methnames, apiseqs, tokens, chunk_asts, chunk_first, chunk_last, descs]
+
 			negsims = np.negative(sims)
 			predict = np.argsort(negsims)  # predict = np.argpartition(negsims, kth=n_results-1)
 			predict = predict[:n_results]
@@ -450,13 +422,13 @@ class CodeSearcher:
 if __name__ == '__main__':
 	conf = configsA.conf()
 	codesearcher = CodeSearcher(conf)
-	mode = 'eval'
+	mode = 'train'
 	#  Define model
 	model = eval(conf.model_name)(conf)
 	model.build()
 	optimizer = conf.optimizer
 
-	model.compile(optimizer=optimizer)
+	model.compile()
 
 	if mode == 'train':
 		codesearcher.train(model)

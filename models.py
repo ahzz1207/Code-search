@@ -17,8 +17,7 @@ class JointEmbeddingModel:
         self.apiseq_len = config.apiseq_len
         self.tokens_len = config.tokens_len
         self.desc_len = config.desc_len
-
-        self.vocab_size = config.n_words  # the size of vocab
+        self.conf = config  # the size of vocab
         self.embed_dims = config.embed_dims
         self.lstm_dims = config.lstm_dims
         self.hidden_dims = config.hidden_dims
@@ -52,7 +51,7 @@ class JointEmbeddingModel:
         init_emd_weights = init_emd_weights if init_emd_weights is None else [init_emd_weights]
 
         embedding = Embedding(
-            input_dim=self.vocab_size,
+            input_dim=self.conf.methname_words,
             output_dim=self.embed_dims,
             weights=init_emd_weights,
             mask_zero=False,
@@ -88,7 +87,7 @@ class JointEmbeddingModel:
         # apiseq
         # embedding layer
         embedding = Embedding(
-            input_dim=self.vocab_size,
+            input_dim=self.conf.api_words,
             output_dim=self.embed_dims,
             mask_zero=False,
             name='embedding_apiseq'
@@ -126,7 +125,7 @@ class JointEmbeddingModel:
         init_emd_weights = init_emd_weights if init_emd_weights is None else [init_emd_weights]
 
         embedding = Embedding(
-            input_dim=self.vocab_size,
+            input_dim=self.conf.tokens_words,
             output_dim=self.embed_dims,
             weights=init_emd_weights,
             mask_zero=False,
@@ -141,13 +140,13 @@ class JointEmbeddingModel:
 
         # # forward rnn
         # fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_tokens_fw')
-		#
+        #
         # # backward rnn
         # bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_tokens_bw')
-		#
+        #
         # tokens_fw = fw_rnn(tokens_dropout)
         # tokens_bw = bw_rnn(tokens_dropout)
-		#
+        #
         # dropout = Dropout(0.25, name='dropout_tokens_rnn')
         # tokens_fw_dropout = dropout(tokens_fw)
         # tokens_bw_dropout = dropout(tokens_bw)
@@ -177,7 +176,7 @@ class JointEmbeddingModel:
         init_emd_weights = init_emd_weights if init_emd_weights is None else [init_emd_weights]
 
         embedding = Embedding(
-            input_dim=self.vocab_size,
+            input_dim=self.conf.desc_words,
             output_dim=self.embed_dims,
             weights=init_emd_weights,
             mask_zero=False,
@@ -226,8 +225,8 @@ class JointEmbeddingModel:
         self.sim_model.summary()
 
         #  4 -- build training model
-        good_sim = sim_model([self.methodname, self.apiseq, self.tokens, self.desc_good])
-        bad_sim = sim_model([self.methodname, self.apiseq, self.tokens, self.desc_bad])
+        good_sim = self.sim_model([self.methodname, self.apiseq, self.tokens, self.desc_good])
+        bad_sim = self.sim_model([self.methodname, self.apiseq, self.tokens, self.desc_bad])
 
         loss = Lambda(lambda x: K.maximum(1e-6, self.margin - x[0] + x[1]), output_shape=lambda x: x[0], name='loss')([good_sim, bad_sim])
 
