@@ -110,7 +110,7 @@ class JointEmbeddingModel:
 			name='embedding_Node'
 		)
 
-		dropout = Dropout(0.5, name='dropout_ast_embed')
+		dropout = Dropout(0.25, name='dropout_ast_embed')
 
 		# forward rnn
 		fw_rnn = LSTM(self.lstm_dims, name='lstm_ast_fw')
@@ -139,7 +139,7 @@ class JointEmbeddingModel:
 
 		# maxpool = Lambda(lambda x: K.mean(x, axis=2, keepdims=False), output_shape=lambda x: (x[0], x[1], x[3]),
 		#                  name='maxpooling_ast')
-		sumpool = Lambda(lambda x: K.sum(x, axis=2, keepdims=False), output_shape=lambda x: (x[0], x[1], x[3]),
+		sumpool = Lambda(lambda x: K.max(x, axis=2, keepdims=False), output_shape=lambda x: (x[0], x[1], x[3]),
 		                 name='maxpooling_node')
 
 		# astpath_fw_pool = maxpool(astpath_fw)
@@ -147,7 +147,7 @@ class JointEmbeddingModel:
 		first_sumpool = sumpool(first_embed)
 		last_sumpool = sumpool(last_embed)
 		astpath_concat = Concatenate(axis=2, name='astpathConcat')([astpath_fw, astpath_bw, first_sumpool, last_sumpool])
-		astpath_out = Dense(2*self.lstm_dims, 'tanh', name='astpath')(astpath_concat)
+		astpath_out = Dense(self.lstm_dims, 'relu', name='astpath')(astpath_concat)
 
 		meanpool = Lambda(lambda x: K.mean(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
 		                 name='meanpooling_astpaths')
@@ -192,51 +192,51 @@ class JointEmbeddingModel:
 		                 name='maxpooling_methodname')
 		methodname_pool = Concatenate(name='concat_methodname_lstm')(
 			[maxpool(methodname_fw_dropout), maxpool(methodname_bw_dropout)])
-		activation = Activation('tanh', name='active_methodname')
+		activation = Activation('relu', name='active_methodname')
 		methodname_repr = activation(methodname_pool)
 
-		# 5 apiseq
-		# embedding layer
-		embedding = Embedding(
-			input_dim=self.conf.api_words,
-			output_dim=self.embed_dims,
-			mask_zero=False,
-			name='embedding_apiseq'
-		)
-
-		apiseq_embedding = embedding(apiseq)
-
-		# dropout
-		dropout = Dropout(0.25, name='dropout_apiseq_embed')
-		apiseq_dropout = dropout(apiseq_embedding)
-
-		# forward rnn
-		fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_apiseq_fw')
-
-		# backward rnn
-		bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_apiseq_bw')
-
-		apiseq_fw = fw_rnn(apiseq_dropout)
-		apiseq_bw = bw_rnn(apiseq_dropout)
-
-		dropout = Dropout(0.25, name='dropout_apiseq_rnn')
-		apiseq_fw_dropout = dropout(apiseq_fw)
-		apiseq_bw_dropout = dropout(apiseq_bw)
-
-		# max pooling
-
-		maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
-		                 name='maxpooling_apiseq')
-		apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
-		activation = Activation('tanh', name='active_apiseq')
-		apiseq_repr = activation(apiseq_pool)
+		# # 5 apiseq
+		# # embedding layer
+		# embedding = Embedding(
+		# 	input_dim=self.conf.api_words,
+		# 	output_dim=self.embed_dims,
+		# 	mask_zero=False,
+		# 	name='embedding_apiseq'
+		# )
+		#
+		# apiseq_embedding = embedding(apiseq)
+		#
+		# # dropout
+		# dropout = Dropout(0.25, name='dropout_apiseq_embed')
+		# apiseq_dropout = dropout(apiseq_embedding)
+		#
+		# # forward rnn
+		# fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_apiseq_fw')
+		#
+		# # backward rnn
+		# bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_apiseq_bw')
+		#
+		# apiseq_fw = fw_rnn(apiseq_dropout)
+		# apiseq_bw = bw_rnn(apiseq_dropout)
+		#
+		# dropout = Dropout(0.25, name='dropout_apiseq_rnn')
+		# apiseq_fw_dropout = dropout(apiseq_fw)
+		# apiseq_bw_dropout = dropout(apiseq_bw)
+		#
+		# # max pooling
+		#
+		# maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
+		#                  name='maxpooling_apiseq')
+		# apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
+		# activation = Activation('tanh', name='active_apiseq')
+		# apiseq_repr = activation(apiseq_pool)
 
 
 		# fusion methodname, apiseq, tokens
-		merge_ast_repr = Concatenate(name='merge_methname_ast')([methodname_repr, astpath_repr, apiseq_repr])
+		merge_ast_repr = Concatenate(name='merge_methname_ast')([methodname_repr, astpath_repr])
 		code_repr = merge_ast_repr
 
-		code_repr = Dense(2*self.lstm_dims, activation='tanh', name='dense_coderepr')(code_repr)
+		code_repr = Dense(2*self.lstm_dims, name='dense_coderepr')(code_repr)
 
 		self.code_repr_model = Model(inputs=[methodname, apiseq, astpath, firstNode, lastNode],
 		                             outputs=[code_repr], name='code_repr_model')
@@ -283,7 +283,7 @@ class JointEmbeddingModel:
 		maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
 		                 name='maxpooling_desc')
 		desc_pool = Concatenate(name='concat_desc_lstm')([maxpool(desc_fw_dropout), maxpool(desc_bw_dropout)])
-		activation = Activation('tanh', name='active_desc')
+		activation = Activation('relu', name='active_desc')
 		desc_repr = activation(desc_pool)
 
 		self.desc_repr_model = Model(inputs=[desc], outputs=[desc_repr], name='desc_repr_model')
@@ -296,7 +296,7 @@ class JointEmbeddingModel:
 		bad_desc_repr = self.desc_repr_model([self.desc_bad])
 		good_sim = Dot(axes=1, normalize=True, name='cos_sim_good')([code_repr_v, good_desc_repr])
 		bad_sim = Dot(axes=1, normalize=True, name='cos_sim_bad')([code_repr_v, bad_desc_repr])
-		loss = Lambda(lambda x: K.maximum(1e-6, self.margin - x[0] + x[1]), output_shape=lambda x: x[0], name='loss')(
+		loss = Lambda(lambda x: K.maximum(1e-9, self.margin - x[0] + x[1]), output_shape=lambda x: x[0], name='loss')(
 			[good_sim, bad_sim])
 
 		self.training_model = Model(
@@ -305,7 +305,7 @@ class JointEmbeddingModel:
 		self.training_model.summary()
 
 	def compile(self, **kwargs):
-		optimizer = optimizers.Adam(lr=0.0003)
+		optimizer = optimizers.Adam(lr=0.001)
 		self.code_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
 		self.desc_repr_model.compile(loss='cosine_proximity', optimizer=optimizer, **kwargs)
 		self.training_model.compile(loss=lambda y_true, y_pred: y_pred + y_true - y_true, optimizer=optimizer, **kwargs)

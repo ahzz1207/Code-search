@@ -15,7 +15,7 @@ import traceback
 import threading
 from utils import normalize, cos_np_for_normalized
 # from models_notoken import *
-from model_transformer_bilstm import *
+from models_notoken import *
 import pymysql
 import json
 import numpy as np
@@ -162,20 +162,20 @@ class CodeSearcher:
 		return pad_sequences(data, maxlen=len, padding='post', truncating='post', value=0)
 
 	def save_model_epoch(self, model, epoch):
-		if not os.path.exists(self.path + 'models-notoken/' + self.conf.model_name + '/'):
-			os.makedirs(self.path + 'models-notoken/' + self.conf.model_name + '/')
+		if not os.path.exists(self.path + 'models-notoken2/' + self.conf.model_name + '/'):
+			os.makedirs(self.path + 'models-notoken2/' + self.conf.model_name + '/')
 
-		model.save("{}models-notoken/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models-notoken/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
+		model.save("{}models-notoken2/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models-notoken2/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch),
 		           overwrite=True)
 
 	def load_model_epoch(self, model, epoch):
 		assert os.path.exists(
-			"{}models-notoken/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
+			"{}models-notoken2/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch)) \
 			, "Weights at epoch {:d} not found".format(epoch)
 
-		model.load("{}models-notoken/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
-		           "{}models-notoken/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
+		model.load("{}models-notoken2/{}/epo{:d}_code.h5".format(self.path, self.conf.model_name, epoch),
+		           "{}models-notoken2/{}/epo{:d}_desc.h5".format(self.path, self.conf.model_name, epoch))
 		print("Load model %epoch" % epoch)
 
 
