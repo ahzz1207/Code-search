@@ -96,9 +96,6 @@ class CodeSearcher:
 			chunk_tokens.append(np.array([int(x, base=10) for x in row[1].strip().split(' ')]))
 			chunk_descs.append(np.array([int(x, base=10) for x in row[2].strip().split(' ')]))
 			chunk_apiseq.append(np.array([int(x, base=10) for x in row[3].strip().split(' ')]))
-			chunk_asts.append(row[4][:100])
-			chunk_first.append(row[5][:100])
-			chunk_last.append(row[6][:100])
 		chunk_padded_astspaths = np.asarray(chunk_asts)
 		chunk_padded_first = np.asarray(chunk_first)
 		chunk_padded_last = np.asarray(chunk_last)
@@ -422,7 +419,7 @@ class CodeSearcher:
 if __name__ == '__main__':
 	conf = configsA.conf()
 	codesearcher = CodeSearcher(conf)
-	mode = 'train'
+	mode = 'eval'
 	#  Define model
 	model = eval(conf.model_name)(conf)
 	model.build()

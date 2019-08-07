@@ -195,45 +195,45 @@ class JointEmbeddingModel:
 		activation = Activation('relu', name='active_methodname')
 		methodname_repr = activation(methodname_pool)
 
-		# # 5 apiseq
-		# # embedding layer
-		# embedding = Embedding(
-		# 	input_dim=self.conf.api_words,
-		# 	output_dim=self.embed_dims,
-		# 	mask_zero=False,
-		# 	name='embedding_apiseq'
-		# )
-		#
-		# apiseq_embedding = embedding(apiseq)
-		#
-		# # dropout
-		# dropout = Dropout(0.25, name='dropout_apiseq_embed')
-		# apiseq_dropout = dropout(apiseq_embedding)
-		#
-		# # forward rnn
-		# fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_apiseq_fw')
-		#
-		# # backward rnn
-		# bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_apiseq_bw')
-		#
-		# apiseq_fw = fw_rnn(apiseq_dropout)
-		# apiseq_bw = bw_rnn(apiseq_dropout)
-		#
-		# dropout = Dropout(0.25, name='dropout_apiseq_rnn')
-		# apiseq_fw_dropout = dropout(apiseq_fw)
-		# apiseq_bw_dropout = dropout(apiseq_bw)
-		#
-		# # max pooling
-		#
-		# maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
-		#                  name='maxpooling_apiseq')
-		# apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
-		# activation = Activation('tanh', name='active_apiseq')
-		# apiseq_repr = activation(apiseq_pool)
+		# 5 apiseq
+		# embedding layer
+		embedding = Embedding(
+			input_dim=self.conf.api_words,
+			output_dim=self.embed_dims,
+			mask_zero=False,
+			name='embedding_apiseq'
+		)
+
+		apiseq_embedding = embedding(apiseq)
+
+		# dropout
+		dropout = Dropout(0.25, name='dropout_apiseq_embed')
+		apiseq_dropout = dropout(apiseq_embedding)
+
+		# forward rnn
+		fw_rnn = LSTM(self.lstm_dims, return_sequences=True, name='lstm_apiseq_fw')
+
+		# backward rnn
+		bw_rnn = LSTM(self.lstm_dims, return_sequences=True, go_backwards=True, name='lstm_apiseq_bw')
+
+		apiseq_fw = fw_rnn(apiseq_dropout)
+		apiseq_bw = bw_rnn(apiseq_dropout)
+
+		dropout = Dropout(0.25, name='dropout_apiseq_rnn')
+		apiseq_fw_dropout = dropout(apiseq_fw)
+		apiseq_bw_dropout = dropout(apiseq_bw)
+
+		# max pooling
+
+		maxpool = Lambda(lambda x: K.max(x, axis=1, keepdims=False), output_shape=lambda x: (x[0], x[2]),
+		                 name='maxpooling_apiseq')
+		apiseq_pool = Concatenate(name='concat_apiseq_lstm')([maxpool(apiseq_fw_dropout), maxpool(apiseq_bw_dropout)])
+		activation = Activation('relu', name='active_apiseq')
+		apiseq_repr = activation(apiseq_pool)
 
 
 		# fusion methodname, apiseq, tokens
-		merge_ast_repr = Concatenate(name='merge_methname_ast')([methodname_repr, astpath_repr])
+		merge_ast_repr = Concatenate(name='merge_methname_ast')([methodname_repr, astpath_repr, apiseq_repr])
 		code_repr = merge_ast_repr
 
 		code_repr = Dense(2*self.lstm_dims, name='dense_coderepr')(code_repr)

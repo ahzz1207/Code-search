@@ -15,7 +15,7 @@ import traceback
 import threading
 from utils import normalize, cos_np_for_normalized
 # from models_notoken import *
-from model_tokens_path import *
+from models import *
 import pymysql
 import json
 import numpy as np
@@ -43,7 +43,7 @@ class CodeSearcher:
 	def get_dataset2(self):
 		self.r = redis.Redis(charset='utf-8')
 
-		self.data_len = self.r.llen('index')
+		self.data_len = self.r.llen('onlyindex')
 
 		print("All index init succes, it's length ：%d" % self.data_len)
 
