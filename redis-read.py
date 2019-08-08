@@ -40,9 +40,9 @@ r = redis.Redis(charset='utf-8')
 # f.close()
 
 
-data = json.load(open("onlyindex.json", 'r'))
+data = json.load(open("onlyvalid.json", 'r'))
 for line in tqdm.tqdm(data):
-	r.rpush("onlyindex", json.dumps(line))
+	r.rpush("onlyvalid", json.dumps(line))
 
 # for row in tqdm.tqdm(f.readlines()):
 # 	i += 1
